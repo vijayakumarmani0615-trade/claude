@@ -2,10 +2,8 @@
 # Strategy configuration: EMA(8) trend-pullback
 #
 # Mechanical read of: "day has to be trending, then take the first pullback
-# to the 8 EMA." See STRATEGY_EMA_PULLBACK.md for the full spec and the open
-# questions that still need your confirmation (especially exits, which you
-# said you'd decide later — the values below are placeholders reusing the
-# same defaults as the S/R strategy).
+# to the 8 EMA, 20pt stop / 40pt target." See STRATEGY_EMA_PULLBACK.md for
+# the full spec and the remaining open questions.
 #
 # Run with:
 #   python -m src.cli --config config_ema_pullback.yaml --strategy ema_pullback
@@ -36,14 +34,14 @@ risk:
   sizing_method: fixed_lot    # fixed_lot | risk_pct
   lot_size: 75                # CONFIRM current exchange lot size before trusting this
   lots: 1
-  sl_method: structure        # structure | atr | fixed  (placeholder — you said "decide later")
+  sl_method: fixed            # structure | atr | fixed
   sl_buffer_pct: 0.0010
   atr_period: 14
   atr_mult: 1.5
-  sl_fixed_points: 40
-  target_method: rr           # rr | fixed  (placeholder — you said "decide later")
+  sl_fixed_points: 20         # 20pt stop-loss
+  target_method: fixed        # rr | fixed
   rr_multiple: 1.5
-  target_fixed_points: 100
+  target_fixed_points: 40     # 40pt target (2R given the 20pt stop)
   max_trades_per_day: 1       # enforces "first visit only" — one trade per day
   one_position_at_a_time: true
 

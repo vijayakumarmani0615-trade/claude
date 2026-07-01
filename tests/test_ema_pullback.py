@@ -22,9 +22,9 @@ def base_cfg() -> dict:
         },
         "risk": {
             "capital": 200_000, "sizing_method": "fixed_lot", "lot_size": 75,
-            "lots": 1, "sl_method": "structure", "sl_buffer_pct": 0.001,
-            "atr_period": 14, "atr_mult": 1.5, "sl_fixed_points": 40,
-            "target_method": "rr", "rr_multiple": 1.5, "target_fixed_points": 100,
+            "lots": 1, "sl_method": "fixed", "sl_buffer_pct": 0.001,
+            "atr_period": 14, "atr_mult": 1.5, "sl_fixed_points": 20,
+            "target_method": "fixed", "rr_multiple": 1.5, "target_fixed_points": 40,
             "max_trades_per_day": 1, "one_position_at_a_time": True,
         },
         "costs": {"slippage_pct": 0.0002, "brokerage_per_trade": 40},

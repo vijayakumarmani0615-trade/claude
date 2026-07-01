@@ -3,7 +3,8 @@
 This is my mechanical interpretation of your idea:
 
 > *"Indices, 15-min. Day has to be trending, then take the trade on the first
-> visit to the 8 EMA. Capital ₹2,00,000, 1 lot."*
+> visit to the 8 EMA. Capital ₹2,00,000, 1 lot. Target 40 points, stop-loss
+> 20 points."*
 
 Read this and correct anything that doesn't match how you actually trade.
 Every number maps to a knob in `config_ema_pullback.yaml`.
@@ -50,20 +51,16 @@ open** (`backtest.entry: next_open`), same convention as the S/R strategy.
 `risk.max_trades_per_day: 1`. If the trend direction flips intraday, the
 day's trade is already used up (no second attempt in the new direction).
 
-## 4. Exit rules — you said "will decide later"
-Placeholder, reusing the same defaults as the S/R strategy so the backtest
-runs end-to-end. **Not validated, please replace:**
-- Stop: `structure` — beyond the signal bar's low (long) / high (short) +
-  buffer.
-- Target: `rr` — 1.5x the stop distance.
-- Time exit: squared off at 15:15 if still open.
-
-Natural alternatives for an EMA-pullback strategy, once you decide:
-- Stop beyond the ema_slow line instead of the signal bar (wider, trend-
-  following).
-- Trail the stop under/over ema_fast as the trend continues, instead of a
-  fixed target.
-- Target the prior swing high/low (reusing `src/indicators/levels.py`).
+## 4. Exit rules
+- **Stop-loss**: fixed 20 index points (`sl_method: fixed`,
+  `sl_fixed_points: 20`) from entry, regardless of the signal bar's
+  structure.
+- **Target**: fixed 40 index points (`target_method: fixed`,
+  `target_fixed_points: 40`) — a 2R payoff given the 20pt stop.
+- **Time exit**: squared off at 15:15 if still open.
+- If a single bar touches both stop and target, the stop is assumed hit
+  first (`backtest.sl_priority: true`) — conservative, same convention as
+  the S/R strategy.
 
 ## 5. Position sizing & risk
 - **Fixed size**, not risk-based: `lot_size` (75, confirm current NSE Nifty
@@ -77,13 +74,13 @@ Natural alternatives for an EMA-pullback strategy, once you decide:
 Same as the S/R strategy: slippage per side + flat brokerage per round trip.
 
 ## Open questions for you (defaults chosen for now)
-1. **Exits** — you said you'd decide later. The placeholder above is
-   untested for this strategy; tell me your actual stop/target rule (or "use
-   whatever backtests best") and I'll wire it in and re-run.
-2. Is the **extension-before-pullback filter** what you meant by "visit," or
+1. Is the **extension-before-pullback filter** what you meant by "visit," or
    should *any* touch of the 8 EMA count, even without a prior extended move?
-3. Should a **trend flip mid-day** (e.g. up in the morning, down after lunch)
+2. Should a **trend flip mid-day** (e.g. up in the morning, down after lunch)
    allow a second trade in the new direction, or does "1 trade/day" mean
    exactly one shot regardless?
-4. Which **index** — confirm Nifty 50, or did you mean Bank Nifty / another
+3. Which **index** — confirm Nifty 50, or did you mean Bank Nifty / another
    index? Lot size and data source depend on this.
+4. 20pt stop / 40pt target are absolute index points regardless of entry
+   price level — is that intentional (vs. a percentage of price, which would
+   scale as the index has risen from ~12,000 in 2020 to ~25,000+ now)?
