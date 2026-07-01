@@ -34,8 +34,8 @@ h75SupCol= input.color(color.new(color.aqua,   0), "75m support",    group = grp
 
 grpC = "15-min (chart) swings"
 useC     = input.bool(true, "Use current-chart swings", group = grpC)
-cLeft    = input.int(5, "Chart left bars",  minval = 1, group = grpC)
-cRight   = input.int(5, "Chart right bars", minval = 1, group = grpC)
+cLeft    = input.int(8, "Chart left bars",  minval = 1, group = grpC)
+cRight   = input.int(8, "Chart right bars", minval = 1, group = grpC)
 cResCol  = input.color(color.new(color.maroon, 0), "Chart resistance", group = grpC)
 cSupCol  = input.color(color.new(color.teal,   0), "Chart support",    group = grpC)
 
@@ -44,6 +44,13 @@ maxLevels = input.int(6, "Max levels per side", minval = 1, maxval = 20, group =
 mergePct  = input.float(0.10, "Merge levels within %", step = 0.05, group = grpGen) / 100.0
 removeBrk = input.bool(true, "Remove a level once price closes through it", group = grpGen)
 showTag   = input.bool(true, "Label each level (D / 75 / 15)", group = grpGen)
+
+grpSig = "Signals"
+showSig   = input.bool(true,  "Show reversal / false-break signals", group = grpSig)
+sigRev    = input.bool(true,  "Reversal (bounce off a level)", group = grpSig)
+sigFB     = input.bool(true,  "False breakout / breakdown (trap)", group = grpSig)
+touchPct  = input.float(0.15, "Touch tolerance %",  step = 0.05, group = grpSig) / 100.0
+breakPct  = input.float(0.10, "Break buffer %",     step = 0.05, group = grpSig) / 100.0
 
 // ---- Persistent level stores ------------------------------------------------
 var array<line>  resL = array.new<line>()
@@ -112,3 +119,48 @@ if useC and not na(plC)
 
 f_prune(resL, resP, true)
 f_prune(supL, supP, false)
+
+// ---- Signals ----------------------------------------------------------------
+// Test the current bar against the nearest active level for a rejection.
+// SHORT at resistance, LONG at support. Same rules as the backtest engine.
+
+// Nearest resistance at/above price (with touch tolerance).
+f_near_res(price) =>
+    float best = na
+    if array.size(resP) > 0
+        for i = 0 to array.size(resP) - 1
+            lvl = array.get(resP, i)
+            if lvl >= price * (1 - touchPct)
+                if na(best) or math.abs(lvl - price) < math.abs(best - price)
+                    best := lvl
+    best
+
+// Nearest support at/below price (with touch tolerance).
+f_near_sup(price) =>
+    float best = na
+    if array.size(supP) > 0
+        for i = 0 to array.size(supP) - 1
+            lvl = array.get(supP, i)
+            if lvl <= price * (1 + touchPct)
+                if na(best) or math.abs(lvl - price) < math.abs(best - price)
+                    best := lvl
+    best
+
+resLvl = f_near_res(close)
+supLvl = f_near_sup(close)
+
+// SHORT — rejection at resistance.
+shortFB  = showSig and sigFB  and not na(resLvl) and high > resLvl * (1 + breakPct) and close < resLvl
+shortRev = showSig and sigRev and not na(resLvl) and high >= resLvl * (1 - touchPct) and high <= resLvl * (1 + breakPct) and close < open and close < resLvl and not shortFB
+
+// LONG — rejection at support.
+longFB   = showSig and sigFB  and not na(supLvl) and low < supLvl * (1 - breakPct) and close > supLvl
+longRev  = showSig and sigRev and not na(supLvl) and low <= supLvl * (1 + touchPct) and low >= supLvl * (1 - breakPct) and close > open and close > supLvl and not longFB
+
+plotshape(longRev,  title = "Long reversal",   style = shape.triangleup,   location = location.belowbar, color = color.new(color.lime,  0), size = size.small, text = "Rev")
+plotshape(longFB,   title = "Long false-break", style = shape.triangleup,   location = location.belowbar, color = color.new(color.green, 0), size = size.small, text = "FB")
+plotshape(shortRev, title = "Short reversal",   style = shape.triangledown, location = location.abovebar, color = color.new(color.red,    0), size = size.small, text = "Rev")
+plotshape(shortFB,  title = "Short false-break", style = shape.triangledown, location = location.abovebar, color = color.new(color.orange, 0), size = size.small, text = "FB")
+
+alertcondition(longRev or longFB,   title = "Long signal",  message = "S/R LONG signal at level")
+alertcondition(shortRev or shortFB, title = "Short signal", message = "S/R SHORT signal at level")
