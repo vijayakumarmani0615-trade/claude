@@ -6,6 +6,7 @@ venv/
 
 # Results (generated)
 results/
+results_ironfly/
 
 # Backtest datasets ARE tracked so they can be committed for backtesting.
 # (data/*.csv is intentionally NOT ignored.)

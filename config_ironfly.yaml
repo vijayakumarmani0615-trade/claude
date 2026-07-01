@@ -1,0 +1,50 @@
+# =============================================================================
+# Iron Fly configuration  (Nifty weekly)
+#
+# Strategy: sell an ATM straddle + buy 300-pt protective wings the day after
+# weekly expiry; roll the tested side 300 pts further out when spot breaks the
+# spread zone; square off at expiry. Full spec in STRATEGY_IRONFLY.md.
+#
+# Start on synthetic to sanity-check the pipeline, then point it at REAL Nifty
+# weekly option data (source: csv) to actually judge the edge.
+# =============================================================================
+
+data:
+  source: synthetic          # synthetic | csv
+  symbol: "NIFTY"
+  spot_csv: "data/nifty_15m.csv"          # 15-min spot OHLCV (ATM + zone breaks)
+  options_csv: "data/nifty_options.csv"   # long-format option chain (see README)
+  session_start: "09:15"
+  session_end: "15:30"
+  square_off: "15:15"        # exit time on expiry day
+
+strategy:
+  strike_step: 50            # Nifty weekly strike interval (points)
+  wing_width: 300            # protective wing distance from ATM (the iron fly body)
+  entry_time: "09:20"        # enter at/after this bar on the entry day
+  entry_offset_days: 1       # trading days after prior expiry to enter (1 = next day)
+
+  # --- adjustment / rolling ---
+  adjust: true               # false = static iron fly, no rolls
+  roll_trigger: 300          # spot this far from the tested SHORT strike -> roll
+  roll_step: 300             # re-establish the tested vertical this far out
+  roll_scope: vertical       # vertical (roll short + its wing) | short_only
+  max_rolls_per_side: 3      # stop chasing after this many rolls per side
+
+lots:
+  lot_size: 75               # Nifty lot size
+  lots: 1                    # lots per leg
+  capital: 1000000           # starting capital (INR) — for return/drawdown %
+
+costs:
+  slippage_pct: 0.01         # per option leg, per side (fraction of option price)
+  brokerage_per_leg: 20      # flat INR charged each time a leg is opened/closed
+
+# --- synthetic generator (sanity pipeline only; ignored when source: csv) -----
+synthetic:
+  weeks: 24                  # number of weekly cycles to generate
+  start: "2024-01-05"        # first entry (a Friday)
+  spot0: 22000               # starting spot
+  annual_vol: 0.14           # realized vol of the generated spot path
+  iv: 0.12                   # implied vol used to price the synthetic chain
+  seed: 7

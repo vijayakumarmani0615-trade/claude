@@ -90,6 +90,43 @@ src/
 tests/                   # pytest suite
 ```
 
+## Iron Fly (Nifty weekly) — separate strategy
+
+A second, independent strategy lives under `src/ironfly/`: a **market-neutral
+iron fly** on Nifty weekly options (sell the ATM straddle, buy 300-pt protective
+wings), entered the day after weekly expiry, with the tested side **rolled 300
+pts further out** when spot breaks the spread zone. The precise mechanical rules
+are in **[STRATEGY_IRONFLY.md](STRATEGY_IRONFLY.md)** — read that and correct
+anything that doesn't match how you trade it.
+
+```bash
+# Sanity-check the pipeline on a synthetic Black-Scholes world (offline)
+python -m src.ironfly_cli --config config_ironfly.yaml
+
+# Judge it on REAL data: 15-min spot bars + a weekly option chain
+python -m src.ironfly_cli --spot data/nifty_15m.csv --options data/nifty_options.csv
+
+python -m pytest tests/test_ironfly.py -v
+```
+
+Results are written to `results_ironfly/`: `summary.json`, `cycles.csv` (one row
+per weekly fly), and `legs.csv` (every leg incl. rolls, with entry/exit/pnl).
+
+**You need real option prices.** Backtesting an options structure requires
+per-strike premium history — the synthetic generator only wires up the pipeline,
+it can't tell you whether the edge is real. Supply a long-format option chain
+CSV (columns, case-insensitive, extras ignored):
+
+```csv
+datetime,expiry,strike,option_type,close
+2024-06-14 09:15:00,2024-06-20,23500,CE,142.5
+2024-06-14 09:15:00,2024-06-20,23500,PE,131.0
+```
+
+`option_type` accepts CE/PE (also CALL/PUT, C/P). All iron fly parameters —
+wing width, roll trigger/step, roll scope, costs, lot size — live in
+`config_ironfly.yaml`.
+
 ## Important disclaimer
 
 This is software for **research and education**. Backtested results do not
