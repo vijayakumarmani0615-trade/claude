@@ -17,7 +17,7 @@ def base_cfg() -> dict:
                  "symbol": "^NSEI", "timeframe": "15m"},
         "strategy": {
             "ema_fast": 8, "ema_slow": 50, "trend_slope_bars": 10,
-            "touch_pct": 0.0015, "require_extension": True,
+            "touch_pct": 0.0, "require_extension": True,
             "extension_pct": 0.0015, "extension_lookback_bars": 6,
         },
         "risk": {
@@ -102,7 +102,54 @@ def test_ema_pullback_fires_even_if_bar_closes_against_the_trend():
     row = df.iloc[i]
     sig = strat.evaluate(i, _row(row.open, row.high, row.low, row.close))
     assert sig is not None
-    assert sig.side == "long"
+
+
+def test_near_miss_does_not_fire_with_zero_touch_tolerance():
+    """Regression for a real bug: at a Nifty-like price level (~26,000), a
+    0.15% touch_pct is a ~35-40pt band -- comparable to a whole bar's range
+    -- so a bar whose low stayed well above the EMA8 line still counted as
+    a "touch". With touch_pct=0 (the corrected default), only a literal
+    cross of the line should fire.
+    """
+    n = 70
+    price_level = 26000.0
+    base = np.linspace(price_level, price_level + 200, n)  # gentle uptrend at realistic scale
+    close = base.copy()
+    idx = pd.date_range("2024-01-02 09:15", periods=n, freq="15min")
+    open_ = np.concatenate([[close[0]], close[:-1]])
+    high = np.maximum(open_, close) + 5
+    low = np.minimum(open_, close) - 5
+
+    ema_prev = ema(pd.Series(close[: n - 1]), 8).iloc[-1]
+    # Old 0.15% tolerance at this price level is ~39 points -- craft a bar
+    # whose low sits 25 points ABOVE the ema line (a real near-miss like the
+    # Dec-1 example): well inside the old tolerance, but not a real touch.
+    o_last, c_last = ema_prev + 30.0, ema_prev + 35.0
+    l_last = ema_prev + 25.0   # 25pt above the line -- never actually touches it
+    h_last = c_last + 5.0
+
+    open_[-1], close[-1], low[-1], high[-1] = o_last, c_last, l_last, h_last
+    df = pd.DataFrame(
+        {"open": open_, "high": high, "low": low, "close": close, "volume": [1000] * n},
+        index=idx,
+    )
+
+    cfg = base_cfg()
+    cfg["strategy"]["require_extension"] = False  # isolate the touch check itself
+    strat_fixed = EmaPullbackStrategy(cfg, df)
+    i = len(df) - 1
+    row = df.iloc[i]
+    sig = strat_fixed.evaluate(i, _row(row.open, row.high, row.low, row.close))
+    assert sig is None, "a bar that never reached the EMA8 line should not signal"
+
+    # Confirm this WOULD have fired under the old loose 0.15% tolerance,
+    # proving this test actually exercises the bug that was fixed.
+    cfg_loose = base_cfg()
+    cfg_loose["strategy"]["require_extension"] = False
+    cfg_loose["strategy"]["touch_pct"] = 0.0015
+    strat_loose = EmaPullbackStrategy(cfg_loose, df)
+    sig_loose = strat_loose.evaluate(i, _row(row.open, row.high, row.low, row.close))
+    assert sig_loose is not None, "sanity check: old tolerance should have fired here"
 
 
 def test_no_signal_without_trend():

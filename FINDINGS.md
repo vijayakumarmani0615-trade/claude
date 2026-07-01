@@ -89,6 +89,17 @@ below.
 
 ## EMA(8) trend-pullback — v2: enter on touch, no confirmation wait
 
+> **⚠️ SUPERSEDED — a bug inflated every result in this section (and
+> everything under it, through the 75-min re-tune).** `touch_pct: 0.0015`
+> created a ~35-40pt tolerance band around the EMA8 line at Nifty's price
+> level — comparable to a whole bar's average range — so 60% of "touches"
+> never actually reached the line at all. See the **"v3: corrected touch
+> definition"** section near the end of this file for what happens with a
+> literal touch requirement (short version: the edge shown below does not
+> survive the fix). Left in place for the historical record of how the bug
+> was found and what it looked like before the fix, not as something to
+> trust.
+
 User correction: don't wait for the candle to close/confirm — enter the
 instant price touches the 8 EMA. Mechanically: trend direction and the
 watched ema_fast level are read as of the *prior* bar (avoiding lookahead),
@@ -376,3 +387,93 @@ pattern, which is a meaningfully stronger signal than either one alone.
 
 Same caveat as before applies: still one instrument (Nifty), one time-based
 split — not a different market or a true walk-forward re-optimization.
+
+---
+
+## EMA(8) trend-pullback — v3: corrected touch definition (the real result)
+
+**A user question about one specific trade (Dec 1, 2025) uncovered a real
+bug that invalidates every EMA-pullback result above.** The trade's recorded
+entry level (EMA8 ≈ 26,238.79) was 24.76 points below the actual low of the
+bar that supposedly "touched" it — the bar never came close to the line.
+
+**Root cause:** `touch_pct: 0.0015` (0.15%) was meant as a small tolerance
+for a "close enough" touch. At Nifty's price level (~26,000), 0.15% is a
+**~35-40 point band** — comparable to a *whole average 15-min bar's range*
+(34.9 points, measured earlier in this file). Checking every trade in the
+15-min backtest:
+
+| | Count | % |
+|---|---|---|
+| Genuine touch (bar actually reached the EMA8 line) | 554 | 39.6% |
+| **Near miss (only within the tolerance, never reached the line)** | **845** | **60.4%** |
+
+Average near-miss trade entered 17.9 points away from the real EMA8 line
+(worst: 38.5 points away). **Most of the "EMA8 touches" behind every result
+in this file, from the entry-timing fix onward, were not real touches.**
+
+### Fix and full re-validation
+
+`touch_pct` now defaults to `0.0` — a bar must literally cross/reach the
+ema_fast value, no tolerance zone (see `src/strategy/ema_pullback.py` and
+`config_ema_pullback*.yaml`). Added a regression test
+(`test_near_miss_does_not_fire_with_zero_touch_tolerance`) that fails
+without the fix and passes with it. Re-ran everything against the corrected
+logic:
+
+**15-min, committed 20pt stop / 40pt target:**
+
+| Metric | Before fix (invalid) | After fix (real) |
+|---|---|---|
+| Trades | 1,399 | 1,277 |
+| Win rate | 57.5% | **28.9%** |
+| Profit factor | 2.14 | **0.62** |
+| Net P&L | +₹11.70L | **−₹5.94L** |
+| Max drawdown | −9.6% | **−288.8%** (loses more than starting capital) |
+
+**Full 43-combo stop/target sweep, corrected:** every single combination is
+now **unprofitable** (PF < 1). Best case in the whole grid: 10pt stop / 100pt
+target at PF 0.94 — still a net loss (−₹67,539). There is no stop/target
+choice that rescues this entry at 15-min.
+
+**Out-of-sample split, corrected:** loses in both halves, not just overall —
+in-sample (2020-22) PF 0.64, out-of-sample (2023-26) PF 0.60. No regime
+where the corrected entry shows an edge.
+
+**75-min re-tune, corrected:** re-ran the full 184-combo sweep
+(`scripts/ema_75m_retune.py`). Best combo found: `trend_slope_bars=2`,
+`extension_lookback_bars=1`, 20pt stop / 250pt target — PF 1.08, win 22.5%,
+net only **+₹0.47L** on ₹2L capital, with a **−32.8% max drawdown**. That's
+marginal at best and nowhere near the previously reported +₹11.46L/PF 2.70 —
+not a robust edge, more like noise sitting just above breakeven at the cost
+of a huge drawdown for very little return.
+
+### Bottom line
+
+**The mechanical rule "day trend (EMA8/EMA50) + first genuine touch of the
+8 EMA" does not have a demonstrable edge, at either 15-min or 75-min,
+independent of stop/target choice.** The earlier "backtest-solid" result
+that survived a slippage stress test and two out-of-sample checks was real
+in the sense that the code correctly backtested *what it was actually
+doing* — but what it was actually doing was trading a much looser "price
+got somewhat close to the 8 EMA" signal, not literally the 8 EMA touch you
+described. That looser signal happened to have an edge; a literal touch of
+the line, checked carefully, does not.
+
+This doesn't necessarily mean the discretionary version of your idea is
+wrong — it means this specific mechanical translation (literal EMA8 touch,
+day-trend filter, these entry/exit rules) isn't it. Worth considering before
+trying more variations:
+- Was "touch" ever meant to include a close approach, not just a literal
+  cross? If so, a much smaller but nonzero tolerance (a handful of points,
+  not a percentage that scales with price) might be closer to intent than
+  either extreme tested so far.
+- The near-miss trades that drove the old "edge" were entering when price
+  was still 15-40 points away from the EMA — i.e., earlier/further from the
+  line than a literal touch. That's closer to "anticipating" the pullback
+  than reacting to it — worth testing deliberately as its own idea (e.g. a
+  fixed-point buffer ahead of the line) rather than as an accidental
+  side effect of a mis-scaled percentage.
+- Re-adding a candle-confirmation requirement (like the S/R strategy's pin
+  bar) on top of a literal touch, rather than "no confirmation," hasn't
+  been tested under the corrected touch logic.

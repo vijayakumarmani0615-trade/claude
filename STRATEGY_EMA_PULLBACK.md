@@ -35,13 +35,21 @@ Only longs are taken on an uptrend day, only shorts on a downtrend day.
 ## 3. "First visit to the 8 EMA" — entry rule
 **Enters on the touch itself — no waiting for the candle to close or
 confirm.** For each bar, if the day's trend (as of the *previous* bar) is up:
-- The bar's **low touches into ema_fast** (within `touch_pct`, 0.15%,
-  measured against the previous bar's ema_fast — the level a resting order
-  would be watching).
+- The bar's **low reaches ema_fast** (within `touch_pct`, **default 0** — a
+  literal touch/cross of the line, measured against the previous bar's
+  ema_fast — the level a resting order would be watching).
 - That's it. The bar is filled **at the touched level**, the instant the
   range reaches it (`backtest.entry: signal_level`) — not the bar's close,
   not the next bar's open. What that bar goes on to do (closes green, red,
   keeps falling) doesn't matter; you're already in.
+
+  ⚠️ `touch_pct` used to default to 0.0015 (0.15%), which at Nifty's price
+  level is a ~35-40 point tolerance band — comparable to a whole bar's
+  average range. That let 60% of "touches" fire on bars that never actually
+  reached the EMA8 line, and inflated backtest results significantly (see
+  the "v3: corrected touch definition" section of `FINDINGS.md`). Keep this
+  at 0, or at most a small fixed number of points, not a percentage that
+  scales with price.
 - Price must have been meaningfully **away from ema_fast recently**
   (`require_extension`: at least `extension_pct` = 0.15% away at some point
   in the last `extension_lookback_bars` = 6 bars). This is what makes it a

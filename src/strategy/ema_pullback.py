@@ -15,10 +15,20 @@ touches the 8 EMA — don't wait for the candle to close and confirm."
      the last `extension_lookback_bars` bars — this is what makes it a
      genuine pullback rather than chop hugging the average.
 
-  3. Entry trigger — the first bar whose range touches ema_fast in the trend
-     direction fires immediately, no close/candle confirmation required:
-       LONG : bar's low touches into ema_fast (within `touch_pct`).
-       SHORT: bar's high touches into ema_fast (within `touch_pct`).
+  3. Entry trigger — the first bar whose range actually reaches ema_fast in
+     the trend direction fires immediately, no close/candle confirmation
+     required:
+       LONG : bar's low crosses down onto/through ema_fast (within
+              `touch_pct`, default 0 -- a literal touch, not a nearby zone).
+       SHORT: bar's high crosses up onto/through ema_fast (within
+              `touch_pct`).
+
+     `touch_pct` is a percentage of price, which is dangerous to set loosely:
+     at 0.15% it was a ~35-40pt band at Nifty's current level -- comparable
+     to a whole average 15-min bar's range -- so 60% of "touches" in an
+     earlier version of this backtest never actually reached the EMA8 line
+     at all, just got somewhat close. Keep this at 0 (or a couple of points
+     at most) unless you deliberately want a wider "close enough" zone.
 
 Both the trend direction and the watched ema_fast level are evaluated as of
 bar `i - 1` (the last fully known bar) — like a resting limit order placed
@@ -44,7 +54,7 @@ class EmaPullbackStrategy:
         self.ema_fast_n = int(sc.get("ema_fast", 8))
         self.ema_slow_n = int(sc.get("ema_slow", 50))
         self.trend_slope_bars = int(sc.get("trend_slope_bars", 10))
-        self.touch_pct = float(sc.get("touch_pct", 0.0015))
+        self.touch_pct = float(sc.get("touch_pct", 0.0))
         self.require_extension = bool(sc.get("require_extension", True))
         self.extension_pct = float(sc.get("extension_pct", 0.0015))
         self.extension_lookback = int(sc.get("extension_lookback_bars", 6))

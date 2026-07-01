@@ -75,10 +75,13 @@ def main():
               f"{m['net_pnl']/1e5:>9.2f}{m['max_drawdown_pct']:>8}")
 
     print(f"\nTotal combos tested: {len(results)}")
-    print("Baseline for comparison: same-15min-config on 75-min (slope=10,ext=6,20/40) "
-          "-> PF 1.06, win 40.9%, net +0.68L, maxDD -42.4%")
-    print("15-min committed (slope=10,ext=6,20/40 @ 15-min bars) -> PF 2.14, win 57.5%, "
-          "net +11.67L, maxDD -9.6%")
+    print("NOTE: figures below are historical, from BEFORE the touch_pct fix "
+          "(see FINDINGS.md) -- kept only so old runs of this script are not "
+          "silently mysterious, not as a live baseline to compare against.")
+    print("  same-15min-config on 75-min (slope=10,ext=6,20/40): PF 1.06, win 40.9%, "
+          "net +0.68L, maxDD -42.4% (pre-fix)")
+    print("  15-min committed (slope=10,ext=6,20/40 @ 15-min bars): PF 2.14, win 57.5%, "
+          "net +11.67L, maxDD -9.6% (pre-fix)")
 
 
 if __name__ == "__main__":
