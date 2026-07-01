@@ -4,10 +4,11 @@ __pycache__/
 .venv/
 venv/
 
-# Results & user data (keep the repo clean; these are generated/private)
+# Results (generated)
 results/
-data/*.csv
-!data/sample_15m.csv
+
+# Backtest datasets ARE tracked so they can be committed for backtesting.
+# (data/*.csv is intentionally NOT ignored.)
 
 # Never commit broker credentials / tokens
 .env
