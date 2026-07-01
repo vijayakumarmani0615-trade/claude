@@ -322,7 +322,38 @@ is much wider than a 15-min bar's, so the same 0.15% tolerance means a
 very different thing at each scale. Most tellingly, the stop-hit rate jumps
 to 59% (vs 42% at 15-min) with the *same* 20pt stop — a strong sign the
 stop is simply too tight for how far price moves inside a 75-min bar,
-not that the underlying pullback idea fails at this timeframe. A fair test
-would re-tune the stop/target and bar-count parameters for 75-min rather
-than reusing 15-min numbers verbatim — not done here since the request was
-specifically to try "the same" config on 75-min.
+not that the underlying pullback idea fails at this timeframe.
+
+### Re-tuned for 75-min — the idea holds, it just needed rescaled parameters
+
+`scripts/ema_75m_retune.py` swept `trend_slope_bars` x `extension_lookback_bars`
+(4 wall-clock-equivalent pairs, from the original bar-counts down to ~2 bars)
+against a stop/target grid scaled ~2x the 15-min one (75-min bars measured
+~2.1x the average high-low range of 15-min bars) — 184 combos with at least
+30 trades, on the same 2020–2026 data:
+
+| Config | Trades | Win% | PF | Net (₹L) | Max DD | Worst streak |
+|---|---|---|---|---|---|---|
+| Same 15-min config, reused (baseline) | 1,021 | 40.9 | 1.06 | +0.68 | −42.4% | 13 |
+| **Committed: slope=2, ext=1, 20/120** | 722 | 45.3 | **2.70** | +11.46 | **−11.1%** | 16 |
+| Best net/PF: slope=3, ext=2, 20/150 | 825 | 41.3 | 2.45 | +12.00 | −9.0% | 18 |
+
+The stop stayed at 20 points in every strong combo — the entry itself (a
+precise EMA8 touch) doesn't need a wider stop even at 75-min. What needed to
+change was the trend/extension lookback (fewer bars, matching the same
+wall-clock window as the 15-min defaults) and, especially, the target
+(120–150pt vs 40pt) — 75-min bars run further before reversing, so a small
+target left a lot of the move on the table and dragged in a worse win/loss
+mix. With those two things fixed, 75-min lands **back in the same ballpark
+as 15-min** (PF 2.70 vs 2.14, net +11.46L vs +11.67L), just with a lower win
+rate (45.3% vs 57.5%) since the reward is a bigger multiple of the risk.
+
+By year for the committed 75-min config: profitable in 6 of 7 years — only
+2026 (partial, 6 trades) is slightly negative — a similar consistency
+pattern to 15-min, though this hasn't had a dedicated out-of-sample split
+run against it the way the 15-min config did.
+
+**Caveat:** this is a sweep-selected combo evaluated on the full history,
+not yet out-of-sample validated the way 15-min's 20/40 was (see the
+out-of-sample section above) — worth doing that same split check before
+treating the 75-min numbers with equal confidence.

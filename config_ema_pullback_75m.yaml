@@ -1,14 +1,21 @@
 # =============================================================================
 # Strategy configuration: EMA(8) trend-pullback -- 75-min timeframe
 #
-# Identical to config_ema_pullback.yaml (same strategy/risk/cost parameters,
-# same 20pt stop / 40pt target) except the data source, to directly compare
-# 15-min vs 75-min. NOTE: `trend_slope_bars`, `extension_lookback_bars` etc.
-# are counted in BARS, not wall-clock time -- at 75-min they span 5x the
-# wall-clock duration they did at 15-min (e.g. trend_slope_bars: 10 is ~1
-# session day at 75-min vs ~2.5 hours at 15-min). Left unchanged here since
-# the request was to run "the same" config, but that's a real difference in
-# what the parameters mean, not just a data swap. See FINDINGS.md.
+# RE-TUNED for 75-min (see scripts/ema_75m_retune.py and FINDINGS.md).
+# Reusing the 15-min config verbatim came back weak (PF 1.06) because every
+# bar-count parameter meant something different at 5x the bar duration, and
+# 75-min bars have ~2.1x the typical high-low range of 15-min bars. This
+# config keeps the same 20pt stop (still the right scale -- the entry is
+# still a precise EMA touch) but:
+#   - trend_slope_bars / extension_lookback_bars scaled down to stay close
+#     to the same WALL-CLOCK window as the 15-min defaults (10 bars * 15min
+#     ~= 2 bars * 75min), not the same bar count.
+#   - target widened a lot (120pt vs 40pt) since 75-min bars swing further
+#     before reversing.
+# Result: PF 2.70, win 45.3%, net +11.46L, max DD -11.1%, profitable in 6 of
+# 7 years -- back in the same ballpark as the 15-min result, just with a
+# lower win rate / bigger R multiple. See FINDINGS.md for the full sweep
+# and an even-higher-net alternative (slope=3, ext=2, 20/150).
 #
 # Run with:
 #   python -m src.cli --config config_ema_pullback_75m.yaml --strategy ema_pullback
@@ -30,11 +37,11 @@ data:
 strategy:
   ema_fast: 8
   ema_slow: 50
-  trend_slope_bars: 10
+  trend_slope_bars: 2       # ~2 bars * 75min ~= 10 bars * 15min (wall-clock equivalent)
   touch_pct: 0.0015
   require_extension: true
   extension_pct: 0.0015
-  extension_lookback_bars: 6
+  extension_lookback_bars: 1  # ~1 bar * 75min ~= 6 bars * 15min
 
 risk:
   capital: 200000
@@ -45,10 +52,10 @@ risk:
   sl_buffer_pct: 0.0010
   atr_period: 14
   atr_mult: 1.5
-  sl_fixed_points: 20
+  sl_fixed_points: 20        # same scale as 15-min -- the entry is still a precise EMA touch
   target_method: fixed
   rr_multiple: 1.5
-  target_fixed_points: 40
+  target_fixed_points: 120   # widened a lot (was 40) -- 75-min bars swing further before reversing
   max_trades_per_day: 1
   one_position_at_a_time: true
   margin_pct: 0.12
