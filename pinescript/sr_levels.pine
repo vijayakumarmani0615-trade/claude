@@ -1,62 +1,88 @@
 //@version=5
 // =============================================================================
-// S/R Levels — visual check for the automation strategy
+// S/R Levels — visual check for the automation strategy (clean version)
 //
-// Draws the same support/resistance levels the backtest engine detects, so you
-// can eyeball them on a 15-min index chart and tell me whether they match how
-// you read the chart.
+// Shows only significant, non-overlapping levels:
+//   - bigger swings = fewer, more meaningful pivots
+//   - near-duplicate levels are merged (within a % band)
+//   - only the N most recent levels per side are kept
+//   - a level is REMOVED once price closes through it (auto-declutter)
+//   - daily pivots (PP / R1 / S1, optional R2 / S2) as fixed references
 //
-//   1. Swing pivots (fractals): a swing high = highest high among `left` bars
-//      before and `right` bars after; swing low = mirror. Confirmed `right`
-//      bars later (no repaint once confirmed).
-//   2. Daily pivot points: PP / R1 / R2 / S1 / S2 from the PREVIOUS day.
-//
-// Defaults mirror config.yaml (swing_left/right = 3, lookback = 300, etc.).
 // Apply on a 15-minute index chart (Nifty / Bank Nifty).
 // =============================================================================
-indicator("S/R Levels (automation check)", overlay = true, max_lines_count = 500, max_labels_count = 500)
+indicator("S/R Levels (automation check)", overlay = true, max_lines_count = 500, max_labels_count = 100)
 
 // ---- Inputs -----------------------------------------------------------------
-grpSwing = "Swing pivots"
-swLeft   = input.int(3,   "Swing left bars",  minval = 1, group = grpSwing)
-swRight  = input.int(3,   "Swing right bars", minval = 1, group = grpSwing)
-lookback = input.int(300, "Keep level active for N bars", minval = 10, group = grpSwing)
-showSwing= input.bool(true, "Show swing levels", group = grpSwing)
+grpSwing  = "Swing pivots"
+swLeft    = input.int(8, "Swing left bars",  minval = 1, group = grpSwing, tooltip = "Higher = fewer, more major levels")
+swRight   = input.int(8, "Swing right bars", minval = 1, group = grpSwing)
+maxLevels = input.int(4, "Max levels per side", minval = 1, maxval = 15, group = grpSwing)
+mergePct  = input.float(0.15, "Merge levels within %", step = 0.05, group = grpSwing) / 100.0
+removeBrk = input.bool(true, "Remove a level once price closes through it", group = grpSwing)
 
-grpZone  = "Zone / touch"
-zonePct  = input.float(0.15, "Touch zone width %", step = 0.05, group = grpZone) / 100.0
-showZone = input.bool(true, "Shade touch zone around each level", group = grpZone)
+grpPivot  = "Daily pivots"
+showPiv   = input.bool(true,  "Show daily pivots (PP / R1 / S1)", group = grpPivot)
+showR2S2  = input.bool(false, "Also show R2 / S2", group = grpPivot)
 
-grpPivot = "Daily pivots"
-showPiv  = input.bool(true, "Show daily pivot points", group = grpPivot)
-showR2S2 = input.bool(true, "Show R2 / S2", group = grpPivot)
+grpStyle  = "Style"
+resCol    = input.color(color.new(color.red,   0), "Resistance", group = grpStyle)
+supCol    = input.color(color.new(color.green, 0), "Support",    group = grpStyle)
+pivCol    = input.color(color.new(color.blue, 20), "Daily pivot",group = grpStyle)
 
-grpStyle = "Style"
-resCol   = input.color(color.new(color.red,   0), "Resistance", group = grpStyle)
-supCol   = input.color(color.new(color.green, 0), "Support",    group = grpStyle)
-pivCol   = input.color(color.new(color.blue,  0), "Daily pivot",group = grpStyle)
+// ---- Persistent level stores ------------------------------------------------
+var array<line>  resL = array.new<line>()
+var array<float> resP = array.new<float>()
+var array<line>  supL = array.new<line>()
+var array<float> supP = array.new<float>()
 
-// ---- Swing pivots -----------------------------------------------------------
-// ta.pivothigh/low return the pivot value confirmed `swRight` bars ago -> the
-// level becomes known only after confirmation, matching the backtester.
+// Is `price` already represented by an existing level (within mergePct)?
+f_exists(arrP, price) =>
+    bool found = false
+    if array.size(arrP) > 0
+        for i = 0 to array.size(arrP) - 1
+            if math.abs(price - array.get(arrP, i)) / array.get(arrP, i) < mergePct
+                found := true
+    found
+
+// Add a new level unless it duplicates an existing one; cap the count.
+f_add(arrL, arrP, price, col) =>
+    if not f_exists(arrP, price)
+        ln = line.new(bar_index - swRight, price, bar_index, price, color = col, width = 2)
+        array.push(arrL, ln)
+        array.push(arrP, price)
+        if array.size(arrL) > maxLevels
+            line.delete(array.shift(arrL))   // drop the oldest
+            array.shift(arrP)
+
+// Each bar: extend active levels to the right; drop any that price broke.
+f_update(arrL, arrP, isRes) =>
+    int i = 0
+    while i < array.size(arrL)
+        ln    = array.get(arrL, i)
+        price = array.get(arrP, i)
+        broken = removeBrk and (isRes ? close > price : close < price)
+        if broken
+            line.delete(ln)
+            array.remove(arrL, i)
+            array.remove(arrP, i)
+        else
+            line.set_x2(ln, bar_index)
+            i += 1
+
+// ---- Swing detection (confirmed swRight bars back -> no repaint) -------------
 ph = ta.pivothigh(high, swLeft, swRight)
 pl = ta.pivotlow(low,  swLeft, swRight)
 
-drawLevel(float price, color col) =>
-    // The pivot occurred swRight bars back; draw the ray from there, extending
-    // forward for `lookback` bars so stale levels drop off the chart.
-    startIdx = bar_index - swRight
-    ln = line.new(startIdx, price, startIdx + lookback, price, xloc = xloc.bar_index, color = col, width = 1, style = line.style_dashed)
-    if showZone
-        box.new(startIdx, price * (1 + zonePct), startIdx + lookback, price * (1 - zonePct), xloc = xloc.bar_index, border_color = color.new(col, 70), bgcolor = color.new(col, 90))
+if not na(ph)
+    f_add(resL, resP, ph, resCol)
+if not na(pl)
+    f_add(supL, supP, pl, supCol)
 
-if showSwing and not na(ph)
-    drawLevel(ph, resCol)
-if showSwing and not na(pl)
-    drawLevel(pl, supCol)
+f_update(resL, resP, true)
+f_update(supL, supP, false)
 
-// ---- Daily pivot points (from previous day) --------------------------------
-// Pull previous day's H/L/C once per new day.
+// ---- Daily pivot points (previous day) --------------------------------------
 pdHigh  = request.security(syminfo.tickerid, "D", high[1],  lookahead = barmerge.lookahead_on)
 pdLow   = request.security(syminfo.tickerid, "D", low[1],   lookahead = barmerge.lookahead_on)
 pdClose = request.security(syminfo.tickerid, "D", close[1], lookahead = barmerge.lookahead_on)
@@ -67,13 +93,8 @@ s1 = 2 * pp - pdHigh
 r2 = pp + (pdHigh - pdLow)
 s2 = pp - (pdHigh - pdLow)
 
-plot(showPiv          ? pp : na, "PP", color = pivCol,                   linewidth = 2, style = plot.style_stepline)
-plot(showPiv          ? r1 : na, "R1", color = color.new(pivCol, 30),    linewidth = 1, style = plot.style_stepline)
-plot(showPiv          ? s1 : na, "S1", color = color.new(pivCol, 30),    linewidth = 1, style = plot.style_stepline)
+plot(showPiv           ? pp : na, "PP", color = pivCol,                linewidth = 2, style = plot.style_stepline)
+plot(showPiv           ? r1 : na, "R1", color = color.new(pivCol, 30), linewidth = 1, style = plot.style_stepline)
+plot(showPiv           ? s1 : na, "S1", color = color.new(pivCol, 30), linewidth = 1, style = plot.style_stepline)
 plot(showPiv and showR2S2 ? r2 : na, "R2", color = color.new(pivCol, 55), linewidth = 1, style = plot.style_stepline)
 plot(showPiv and showR2S2 ? s2 : na, "S2", color = color.new(pivCol, 55), linewidth = 1, style = plot.style_stepline)
-
-// Label the daily pivots on the first bar of each session.
-newDay = ta.change(time("D")) != 0
-if showPiv and newDay
-    label.new(bar_index, pp, "PP", style = label.style_none, textcolor = pivCol, size = size.small)
