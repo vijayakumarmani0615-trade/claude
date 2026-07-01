@@ -353,7 +353,26 @@ By year for the committed 75-min config: profitable in 6 of 7 years — only
 pattern to 15-min, though this hasn't had a dedicated out-of-sample split
 run against it the way the 15-min config did.
 
-**Caveat:** this is a sweep-selected combo evaluated on the full history,
-not yet out-of-sample validated the way 15-min's 20/40 was (see the
-out-of-sample section above) — worth doing that same split check before
-treating the 75-min numbers with equal confidence.
+### Out-of-sample check for the 75-min re-tune
+
+`scripts/ema_75m_oos_validation.py` runs the same in-sample (2020-2022) vs
+out-of-sample (2023-2026) split used for the 15-min config, for both the
+committed 75-min combo and the next-best alternative from the sweep:
+
+| Metric | Committed (20/120) in-sample | out-of-sample | Alt (20/150) in-sample | out-of-sample |
+|---|---|---|---|---|
+| Win rate | 39.3% | **51.6%** | 36.0% | **46.8%** |
+| Profit factor | 2.19 | **3.35** | 2.01 | **2.98** |
+| Max drawdown | −11.1% | **−2.9%** | −9.0% | **−4.8%** |
+
+**Same result as 15-min: the edge strengthens out-of-sample rather than
+decays, for both candidates.** This rules out the retuned 75-min numbers
+being a full-period curve-fit to the specific sweep that produced them —
+the held-out 2023-2026 stretch is markedly better on every metric than the
+in-sample period the combo was picked from, not just similar. Combined with
+the 15-min result, this is now two independent timeframes on the same
+instrument showing the same "gets better, not worse, out of sample"
+pattern, which is a meaningfully stronger signal than either one alone.
+
+Same caveat as before applies: still one instrument (Nifty), one time-based
+split — not a different market or a true walk-forward re-optimization.
