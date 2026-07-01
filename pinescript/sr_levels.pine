@@ -1,34 +1,42 @@
 //@version=5
 // =============================================================================
-// S/R Levels — visual check for the automation strategy (clean version)
+// S/R Levels — Daily + 75-min swing highs/lows (multi-timeframe)
 //
-// Shows only significant, non-overlapping levels:
-//   - bigger swings = fewer, more meaningful pivots
-//   - near-duplicate levels are merged (within a % band)
-//   - only the N most recent levels per side are kept
-//   - a level is REMOVED once price closes through it (auto-declutter)
-//   - daily pivots (PP / R1 / S1, optional R2 / S2) as fixed references
+// Matches the manual method: mark swing highs/lows on the DAILY and the
+// 75-MINUTE charts, then watch those levels while trading the 15-min.
+//
+//   - Daily swing highs (resistance) / lows (support)
+//   - 75-min swing highs (resistance) / lows (support)
+//   - both drawn as rays on the current (15-min) chart
+//   - near-duplicate levels merged; a level is removed once price closes
+//     through it; only the most recent N per side are kept
 //
 // Apply on a 15-minute index chart (Nifty / Bank Nifty).
 // =============================================================================
-indicator("S/R Levels (automation check)", overlay = true, max_lines_count = 500, max_labels_count = 100)
+indicator("S/R Levels — Daily + 75m swings", overlay = true, max_lines_count = 500, max_labels_count = 200)
 
 // ---- Inputs -----------------------------------------------------------------
-grpSwing  = "Swing pivots"
-swLeft    = input.int(8, "Swing left bars",  minval = 1, group = grpSwing, tooltip = "Higher = fewer, more major levels")
-swRight   = input.int(8, "Swing right bars", minval = 1, group = grpSwing)
-maxLevels = input.int(4, "Max levels per side", minval = 1, maxval = 15, group = grpSwing)
-mergePct  = input.float(0.15, "Merge levels within %", step = 0.05, group = grpSwing) / 100.0
-removeBrk = input.bool(true, "Remove a level once price closes through it", group = grpSwing)
+grpD = "Daily swings"
+useD    = input.bool(true, "Use Daily swings", group = grpD)
+dTf     = input.timeframe("D", "Daily timeframe", group = grpD)
+dLeft   = input.int(2, "Daily left bars",  minval = 1, group = grpD)
+dRight  = input.int(2, "Daily right bars", minval = 1, group = grpD)
+dResCol = input.color(color.new(color.red,   0), "Daily resistance", group = grpD)
+dSupCol = input.color(color.new(color.green, 0), "Daily support",    group = grpD)
 
-grpPivot  = "Daily pivots"
-showPiv   = input.bool(true,  "Show daily pivots (PP / R1 / S1)", group = grpPivot)
-showR2S2  = input.bool(false, "Also show R2 / S2", group = grpPivot)
+grp75 = "75-min swings"
+use75    = input.bool(true, "Use 75-min swings", group = grp75)
+h75Tf    = input.timeframe("75", "Intraday timeframe", group = grp75)
+h75Left  = input.int(3, "75m left bars",  minval = 1, group = grp75)
+h75Right = input.int(3, "75m right bars", minval = 1, group = grp75)
+h75ResCol= input.color(color.new(color.orange, 0), "75m resistance", group = grp75)
+h75SupCol= input.color(color.new(color.aqua,   0), "75m support",    group = grp75)
 
-grpStyle  = "Style"
-resCol    = input.color(color.new(color.red,   0), "Resistance", group = grpStyle)
-supCol    = input.color(color.new(color.green, 0), "Support",    group = grpStyle)
-pivCol    = input.color(color.new(color.blue, 20), "Daily pivot",group = grpStyle)
+grpGen = "General"
+maxLevels = input.int(6, "Max levels per side", minval = 1, maxval = 20, group = grpGen)
+mergePct  = input.float(0.10, "Merge levels within %", step = 0.05, group = grpGen) / 100.0
+removeBrk = input.bool(true, "Remove a level once price closes through it", group = grpGen)
+showTag   = input.bool(true, "Label each level (D / 75)", group = grpGen)
 
 // ---- Persistent level stores ------------------------------------------------
 var array<line>  resL = array.new<line>()
@@ -36,7 +44,6 @@ var array<float> resP = array.new<float>()
 var array<line>  supL = array.new<line>()
 var array<float> supP = array.new<float>()
 
-// Is `price` already represented by an existing level (within mergePct)?
 f_exists(arrP, price) =>
     bool found = false
     if array.size(arrP) > 0
@@ -45,56 +52,48 @@ f_exists(arrP, price) =>
                 found := true
     found
 
-// Add a new level unless it duplicates an existing one; cap the count.
-f_add(arrL, arrP, price, col) =>
-    if not f_exists(arrP, price)
-        ln = line.new(bar_index - swRight, price, bar_index, price, color = col, width = 2)
+// Add a level (ray extending right) unless it duplicates one; cap the count.
+f_add(arrL, arrP, price, col, tag) =>
+    if not na(price) and not f_exists(arrP, price)
+        ln = line.new(bar_index, price, bar_index + 1, price, color = col, width = 2, extend = extend.right)
         array.push(arrL, ln)
         array.push(arrP, price)
+        if showTag
+            label.new(bar_index, price, tag, style = label.style_none, textcolor = col, size = size.small)
         if array.size(arrL) > maxLevels
-            line.delete(array.shift(arrL))   // drop the oldest
+            line.delete(array.shift(arrL))
             array.shift(arrP)
 
-// Each bar: extend active levels to the right; drop any that price broke.
-f_update(arrL, arrP, isRes) =>
+// Each bar: drop any level price has closed through.
+f_prune(arrL, arrP, isRes) =>
     int i = 0
     while i < array.size(arrL)
-        ln    = array.get(arrL, i)
         price = array.get(arrP, i)
         broken = removeBrk and (isRes ? close > price : close < price)
         if broken
-            line.delete(ln)
+            line.delete(array.get(arrL, i))
             array.remove(arrL, i)
             array.remove(arrP, i)
         else
-            line.set_x2(ln, bar_index)
             i += 1
 
-// ---- Swing detection (confirmed swRight bars back -> no repaint) -------------
-ph = ta.pivothigh(high, swLeft, swRight)
-pl = ta.pivotlow(low,  swLeft, swRight)
+// ---- Pull higher-timeframe swing pivots -------------------------------------
+// The pivot is confirmed `right` HTF-bars back, so these values are historical
+// (no repaint / no future leak). lookahead_off keeps it honest.
+phD  = request.security(syminfo.tickerid, dTf,   ta.pivothigh(dLeft,  dRight),  lookahead = barmerge.lookahead_off)
+plD  = request.security(syminfo.tickerid, dTf,   ta.pivotlow(dLeft,   dRight),  lookahead = barmerge.lookahead_off)
+ph75 = request.security(syminfo.tickerid, h75Tf, ta.pivothigh(h75Left, h75Right), lookahead = barmerge.lookahead_off)
+pl75 = request.security(syminfo.tickerid, h75Tf, ta.pivotlow(h75Left,  h75Right), lookahead = barmerge.lookahead_off)
 
-if not na(ph)
-    f_add(resL, resP, ph, resCol)
-if not na(pl)
-    f_add(supL, supP, pl, supCol)
+// Add each newly-confirmed pivot once.
+if useD and not na(phD) and (na(phD[1]) or phD != phD[1])
+    f_add(resL, resP, phD, dResCol, "D")
+if useD and not na(plD) and (na(plD[1]) or plD != plD[1])
+    f_add(supL, supP, plD, dSupCol, "D")
+if use75 and not na(ph75) and (na(ph75[1]) or ph75 != ph75[1])
+    f_add(resL, resP, ph75, h75ResCol, "75")
+if use75 and not na(pl75) and (na(pl75[1]) or pl75 != pl75[1])
+    f_add(supL, supP, pl75, h75SupCol, "75")
 
-f_update(resL, resP, true)
-f_update(supL, supP, false)
-
-// ---- Daily pivot points (previous day) --------------------------------------
-pdHigh  = request.security(syminfo.tickerid, "D", high[1],  lookahead = barmerge.lookahead_on)
-pdLow   = request.security(syminfo.tickerid, "D", low[1],   lookahead = barmerge.lookahead_on)
-pdClose = request.security(syminfo.tickerid, "D", close[1], lookahead = barmerge.lookahead_on)
-
-pp = (pdHigh + pdLow + pdClose) / 3.0
-r1 = 2 * pp - pdLow
-s1 = 2 * pp - pdHigh
-r2 = pp + (pdHigh - pdLow)
-s2 = pp - (pdHigh - pdLow)
-
-plot(showPiv           ? pp : na, "PP", color = pivCol,                linewidth = 2, style = plot.style_stepline)
-plot(showPiv           ? r1 : na, "R1", color = color.new(pivCol, 30), linewidth = 1, style = plot.style_stepline)
-plot(showPiv           ? s1 : na, "S1", color = color.new(pivCol, 30), linewidth = 1, style = plot.style_stepline)
-plot(showPiv and showR2S2 ? r2 : na, "R2", color = color.new(pivCol, 55), linewidth = 1, style = plot.style_stepline)
-plot(showPiv and showR2S2 ? s2 : na, "S2", color = color.new(pivCol, 55), linewidth = 1, style = plot.style_stepline)
+f_prune(resL, resP, true)
+f_prune(supL, supP, false)
