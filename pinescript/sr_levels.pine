@@ -32,11 +32,18 @@ h75Right = input.int(3, "75m right bars", minval = 1, group = grp75)
 h75ResCol= input.color(color.new(color.orange, 0), "75m resistance", group = grp75)
 h75SupCol= input.color(color.new(color.aqua,   0), "75m support",    group = grp75)
 
+grpC = "15-min (chart) swings"
+useC     = input.bool(true, "Use current-chart swings", group = grpC)
+cLeft    = input.int(5, "Chart left bars",  minval = 1, group = grpC)
+cRight   = input.int(5, "Chart right bars", minval = 1, group = grpC)
+cResCol  = input.color(color.new(color.maroon, 0), "Chart resistance", group = grpC)
+cSupCol  = input.color(color.new(color.teal,   0), "Chart support",    group = grpC)
+
 grpGen = "General"
 maxLevels = input.int(6, "Max levels per side", minval = 1, maxval = 20, group = grpGen)
 mergePct  = input.float(0.10, "Merge levels within %", step = 0.05, group = grpGen) / 100.0
 removeBrk = input.bool(true, "Remove a level once price closes through it", group = grpGen)
-showTag   = input.bool(true, "Label each level (D / 75)", group = grpGen)
+showTag   = input.bool(true, "Label each level (D / 75 / 15)", group = grpGen)
 
 // ---- Persistent level stores ------------------------------------------------
 var array<line>  resL = array.new<line>()
@@ -94,6 +101,14 @@ if use75 and not na(ph75) and (na(ph75[1]) or ph75 != ph75[1])
     f_add(resL, resP, ph75, h75ResCol, "75")
 if use75 and not na(pl75) and (na(pl75[1]) or pl75 != pl75[1])
     f_add(supL, supP, pl75, h75SupCol, "75")
+
+// Current-chart (15-min) swings — no request.security needed.
+phC = ta.pivothigh(cLeft, cRight)
+plC = ta.pivotlow(cLeft,  cRight)
+if useC and not na(phC)
+    f_add(resL, resP, phC, cResCol, "15")
+if useC and not na(plC)
+    f_add(supL, supP, plC, cSupCol, "15")
 
 f_prune(resL, resP, true)
 f_prune(supL, supP, false)
