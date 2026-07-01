@@ -11,9 +11,9 @@
 # =============================================================================
 
 data:
-  source: synthetic          # synthetic | csv | yfinance
-  symbol: "^NSEI"            # yfinance ticker. ^NSEI = Nifty 50, ^NSEBANK = Bank Nifty
-  csv_path: "data/index_15m.csv"  # used when source == csv
+  source: csv                # synthetic | csv | yfinance
+  symbol: "NIFTY"           # label only
+  csv_path: "data/nifty_15m.csv"  # used when source == csv
   yf_period: "60d"          # yfinance intraday history window (max ~60d for 15m)
   timeframe: "15m"
   session_start: "09:15"    # exchange session (IST)
@@ -22,13 +22,13 @@ data:
   intraday: true            # true = flatten every day at square_off
 
 levels:
-  method: both              # swing | pivots | both
-  swing_left: 3             # bars to the left for a swing pivot
-  swing_right: 3            # bars to the right (confirmation delay)
-  lookback_bars: 300        # keep swing levels formed within this many bars
+  method: swing            # swing | pivots | both  (settled on 15-min swings)
+  swing_left: 8             # bars to the left for a swing pivot (matches Pine)
+  swing_right: 8            # bars to the right (confirmation delay)
+  lookback_bars: 300        # keep swing levels formed within this many bars (~12 days)
   zone_pct: 0.0015          # merge levels within 0.15% into one zone
   touch_pct: 0.0015         # price within 0.15% of a level counts as a "touch"
-  max_levels: 8             # cap active levels per side (nearest kept)
+  max_levels: 6             # cap active levels per side (nearest kept)
 
 strategy:
   setups:
