@@ -14,7 +14,8 @@ import pandas as pd
 
 from ..indicators.atr import atr
 from ..indicators.levels import LevelBook
-from ..strategy.sr_reversal import SRReversalStrategy, Signal
+from ..strategy.sr_reversal import SRReversalStrategy
+from ..strategy.signal import Signal
 
 
 @dataclass
@@ -35,16 +36,26 @@ class Trade:
 
 
 class Backtester:
-    def __init__(self, df: pd.DataFrame, cfg: dict):
+    def __init__(self, df: pd.DataFrame, cfg: dict, strategy=None):
+        """`strategy` lets a caller plug in any strategy exposing
+        `evaluate(i, bar) -> Signal | None`. Defaults to the S/R reversal
+        strategy (built from `cfg["levels"]`/`cfg["strategy"]`) for backward
+        compatibility with existing callers/tests.
+        """
         self.df = df
         self.cfg = cfg
-        self.levels = LevelBook(df, cfg)
-        self.strategy = SRReversalStrategy(cfg, self.levels)
+        if strategy is None:
+            self.levels = LevelBook(df, cfg)
+            strategy = SRReversalStrategy(cfg, self.levels)
+        self.strategy = strategy
         self.atr = atr(df, int(cfg["risk"]["atr_period"]))
 
         r = cfg["risk"]
         self.capital0 = float(r["capital"])
-        self.risk_pct = float(r["risk_per_trade_pct"]) / 100.0
+        self.sizing_method = r.get("sizing_method", "risk_pct")
+        self.risk_pct = float(r.get("risk_per_trade_pct", 0) or 0) / 100.0
+        self.lot_size = int(r.get("lot_size", 1))
+        self.lots = int(r.get("lots", 1))
         self.sl_method = r["sl_method"]
         self.sl_buffer = float(r["sl_buffer_pct"])
         self.atr_mult = float(r["atr_mult"])
@@ -101,6 +112,8 @@ class Backtester:
         return stop, target, dist
 
     def _position_size(self, entry: float, stop: float) -> int:
+        if self.sizing_method == "fixed_lot":
+            return self.lot_size * self.lots
         risk_amount = self.capital0 * self.risk_pct
         per_unit = abs(entry - stop)
         if per_unit <= 0:

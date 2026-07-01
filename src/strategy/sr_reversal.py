@@ -20,20 +20,9 @@ the actual fill (default: next bar's open).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-
+from ..indicators.candles import bear_pin, bull_pin
 from ..indicators.levels import LevelBook, Zone
-
-
-@dataclass
-class Signal:
-    bar_index: int
-    side: str            # "long" or "short"
-    setup: str           # "reversal" or "false_break"
-    level: float         # the S/R price the signal is built on
-    signal_close: float
-    signal_high: float
-    signal_low: float
+from .signal import Signal
 
 
 class SRReversalStrategy:
@@ -54,32 +43,10 @@ class SRReversalStrategy:
         self.levels = levels
 
     def _bull_pin(self, o, h, l, c) -> bool:
-        """Hammer / bullish pin bar: long lower wick, small body up top."""
-        rng = h - l
-        if rng <= 0:
-            return False
-        body = abs(c - o)
-        lower = min(o, c) - l
-        upper = h - max(o, c)
-        return (
-            lower >= self.pin_wick_ratio * body
-            and lower >= self.pin_opp_ratio * upper
-            and lower >= self.pin_min_frac * rng
-        )
+        return bull_pin(o, h, l, c, self.pin_wick_ratio, self.pin_opp_ratio, self.pin_min_frac)
 
     def _bear_pin(self, o, h, l, c) -> bool:
-        """Inverted hammer / bearish pin bar: long upper wick, small body low."""
-        rng = h - l
-        if rng <= 0:
-            return False
-        body = abs(c - o)
-        lower = min(o, c) - l
-        upper = h - max(o, c)
-        return (
-            upper >= self.pin_wick_ratio * body
-            and upper >= self.pin_opp_ratio * lower
-            and upper >= self.pin_min_frac * rng
-        )
+        return bear_pin(o, h, l, c, self.pin_wick_ratio, self.pin_opp_ratio, self.pin_min_frac)
 
     def _nearest(self, zones: list[Zone], price: float, side: str) -> Zone | None:
         """Nearest resistance ABOVE price / support BELOW price (with tolerance)."""

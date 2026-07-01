@@ -60,3 +60,31 @@ As written, it is **not safe to automate for live trading**.
   these rules would have (a) flagged them and (b) avoided the losers around them.
 - A volatility-regime filter (only trade when ATR/price is elevated) has a real
   thesis but must be validated out-of-sample before trusting it.
+
+---
+
+## EMA(8) trend-pullback — first backtest (placeholder exits)
+
+Second strategy in the repo (see `STRATEGY_EMA_PULLBACK.md`): trend filter via
+EMA8/EMA50, first pullback-touch of EMA8 per day, fixed 1-lot sizing.
+
+Run on the same 2020–Jun 2026 Nifty 15-min data
+(`config_ema_pullback.yaml`, `--strategy ema_pullback`):
+
+| Metric | Value |
+|---|---|
+| Trades | 1,357 |
+| Net P&L | −₹4,71,895 |
+| Win rate | 40.3% |
+| Profit factor | 0.84 |
+| Avg R | −0.12 |
+
+**Read this with a large grain of salt — the exit rule (structure stop,
+1.5R target) is an unvalidated placeholder** carried over from the S/R
+strategy because the actual exit rule was left as "decide later." A losing
+number here mostly says "these particular stop/target defaults don't fit
+this entry," not "the entry idea has no edge." Before drawing any conclusion:
+1. Confirm the real exit rule (see open question #1 in
+   `STRATEGY_EMA_PULLBACK.md`) and re-run.
+2. Worth sweeping `rr_multiple` / `sl_buffer_pct` the way `scripts/sweep.py`
+   already does for the S/R strategy, once exits are decided.

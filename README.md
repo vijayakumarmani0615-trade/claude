@@ -1,14 +1,18 @@
-# Indian Index S/R Reversal — Trading Automation
+# Indian Index Strategy Automation
 
-Automating a **support/resistance rejection** strategy for Indian indices
-(Nifty / Bank Nifty) on 15-minute candles. Two setups: **reversal** (bounce off
-a level) and **false breakout/breakdown** (trap the failed break).
+Automating mechanical trading strategies for Indian indices (Nifty / Bank
+Nifty) on 15-minute candles, backtested on the same shared engine.
+
+- **S/R reversal** — bounce off a level (`reversal`) or a failed
+  break/breakdown (`false_break`). Spec: **[STRATEGY.md](STRATEGY.md)**.
+- **EMA(8) trend pullback** — trending day, first pullback touch of the 8
+  EMA. Spec: **[STRATEGY_EMA_PULLBACK.md](STRATEGY_EMA_PULLBACK.md)**.
+
+Read the relevant spec and tell me what to adjust — every number in it maps
+to a config file knob.
 
 We are building this **backtest-first, then paper, then live** — no real orders
 until the edge is proven on historical data.
-
-> The exact, mechanical definition of the strategy lives in
-> **[STRATEGY.md](STRATEGY.md)** — read that and tell me what to adjust.
 
 ## Status
 
@@ -28,6 +32,9 @@ python -m src.cli --config config.yaml
 
 # Run on your own 15-min CSV (see format below)
 python -m src.cli --csv data/nifty_15m.csv
+
+# Run the EMA(8) pullback strategy instead of S/R reversal
+python -m src.cli --config config_ema_pullback.yaml --strategy ema_pullback
 
 # Run the tests
 python -m pytest tests/ -v

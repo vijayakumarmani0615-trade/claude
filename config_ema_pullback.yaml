@@ -1,0 +1,56 @@
+# =============================================================================
+# Strategy configuration: EMA(8) trend-pullback
+#
+# Mechanical read of: "day has to be trending, then take the first pullback
+# to the 8 EMA." See STRATEGY_EMA_PULLBACK.md for the full spec and the open
+# questions that still need your confirmation (especially exits, which you
+# said you'd decide later — the values below are placeholders reusing the
+# same defaults as the S/R strategy).
+#
+# Run with:
+#   python -m src.cli --config config_ema_pullback.yaml --strategy ema_pullback
+# =============================================================================
+
+data:
+  source: csv                # synthetic | csv | yfinance
+  symbol: "NIFTY"           # label only; change to "BANKNIFTY" etc. as needed
+  csv_path: "data/nifty_15m.csv"  # point at any 15-min OHLCV CSV for the index you trade
+  yf_period: "60d"
+  timeframe: "15m"
+  session_start: "09:15"
+  session_end: "15:30"
+  square_off: "15:15"       # intraday hard exit time
+  intraday: true
+
+strategy:
+  ema_fast: 8
+  ema_slow: 50              # trend filter EMA
+  trend_slope_bars: 10      # ema_slow must have risen/fallen over this many bars
+  touch_pct: 0.0015         # price within 0.15% of ema_fast counts as a "touch"
+  require_extension: true   # require price to have been away from ema_fast recently
+  extension_pct: 0.0015     # how far away (0.15%) counts as "extended"
+  extension_lookback_bars: 6  # look this many bars back for the extension
+
+risk:
+  capital: 200000            # starting capital (INR)
+  sizing_method: fixed_lot    # fixed_lot | risk_pct
+  lot_size: 75                # CONFIRM current exchange lot size before trusting this
+  lots: 1
+  sl_method: structure        # structure | atr | fixed  (placeholder — you said "decide later")
+  sl_buffer_pct: 0.0010
+  atr_period: 14
+  atr_mult: 1.5
+  sl_fixed_points: 40
+  target_method: rr           # rr | fixed  (placeholder — you said "decide later")
+  rr_multiple: 1.5
+  target_fixed_points: 100
+  max_trades_per_day: 1       # enforces "first visit only" — one trade per day
+  one_position_at_a_time: true
+
+costs:
+  slippage_pct: 0.00015
+  brokerage_per_trade: 40
+
+backtest:
+  entry: next_open
+  sl_priority: true
