@@ -45,7 +45,41 @@ class SRReversalStrategy:
         self.touch_pct = float(cfg["levels"]["touch_pct"])
         self.require_close = bool(sc["require_close_confirm"])
         self.require_wick = bool(sc.get("require_rejection_wick", False))
+        # Candlestick confirmation: hammer / bullish pin at support (long),
+        # inverted hammer / bearish pin at resistance (short).
+        self.require_candle = bool(sc.get("require_candle_confirm", False))
+        self.pin_wick_ratio = float(sc.get("pin_wick_ratio", 2.0))
+        self.pin_opp_ratio = float(sc.get("pin_opp_ratio", 1.5))
+        self.pin_min_frac = float(sc.get("pin_min_frac", 0.5))
         self.levels = levels
+
+    def _bull_pin(self, o, h, l, c) -> bool:
+        """Hammer / bullish pin bar: long lower wick, small body up top."""
+        rng = h - l
+        if rng <= 0:
+            return False
+        body = abs(c - o)
+        lower = min(o, c) - l
+        upper = h - max(o, c)
+        return (
+            lower >= self.pin_wick_ratio * body
+            and lower >= self.pin_opp_ratio * upper
+            and lower >= self.pin_min_frac * rng
+        )
+
+    def _bear_pin(self, o, h, l, c) -> bool:
+        """Inverted hammer / bearish pin bar: long upper wick, small body low."""
+        rng = h - l
+        if rng <= 0:
+            return False
+        body = abs(c - o)
+        lower = min(o, c) - l
+        upper = h - max(o, c)
+        return (
+            upper >= self.pin_wick_ratio * body
+            and upper >= self.pin_opp_ratio * lower
+            and upper >= self.pin_min_frac * rng
+        )
 
     def _nearest(self, zones: list[Zone], price: float, side: str) -> Zone | None:
         """Nearest resistance ABOVE price / support BELOW price (with tolerance)."""
@@ -73,17 +107,20 @@ class SRReversalStrategy:
             break_line = lvl * (1 + self.break_buffer)
             closed_below = c < lvl
             wick_ok = (not self.require_wick) or (h - max(o, c) > 0)
+            bear_pin = self._bear_pin(o, h, l, c)
+            candle_ok = bear_pin if self.require_candle else True
 
             # false breakout: poked above the level, closed back under.
-            if self.false_break_on and h > break_line and closed_below and wick_ok:
+            if self.false_break_on and h > break_line and closed_below and wick_ok and candle_ok:
                 return Signal(i, "short", "false_break", lvl, c, h, l)
-            # reversal: high reached the zone (within tolerance), rejected, closed under.
+            # reversal: high reached the zone, rejected with a bearish pin, closed under.
+            body_ok = bear_pin if self.require_candle else (c < o)
             if (
                 self.reversal_on
                 and h >= lvl - touch_tol
                 and h <= break_line
                 and (closed_below or not self.require_close)
-                and c < o
+                and body_ok
                 and wick_ok
             ):
                 return Signal(i, "short", "reversal", lvl, c, h, l)
@@ -95,17 +132,20 @@ class SRReversalStrategy:
             break_line = lvl * (1 - self.break_buffer)
             closed_above = c > lvl
             wick_ok = (not self.require_wick) or (min(o, c) - l > 0)
+            bull_pin = self._bull_pin(o, h, l, c)
+            candle_ok = bull_pin if self.require_candle else True
 
             # false breakdown: poked below the level, closed back above.
-            if self.false_break_on and l < break_line and closed_above and wick_ok:
+            if self.false_break_on and l < break_line and closed_above and wick_ok and candle_ok:
                 return Signal(i, "long", "false_break", lvl, c, h, l)
-            # reversal: low reached the zone, bounced, closed above.
+            # reversal: low reached the zone, bounced with a bullish pin, closed above.
+            body_ok = bull_pin if self.require_candle else (c > o)
             if (
                 self.reversal_on
                 and l <= lvl + touch_tol
                 and l >= break_line
                 and (closed_above or not self.require_close)
-                and c > o
+                and body_ok
                 and wick_ok
             ):
                 return Signal(i, "long", "reversal", lvl, c, h, l)

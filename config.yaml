@@ -32,11 +32,17 @@ levels:
 
 strategy:
   setups:
-    reversal: true
-    false_break: true
+    reversal: false          # plain touch-reversal edge too thin to beat costs
+    false_break: true        # pin bar that sweeps the level & reverses = the edge
   break_buffer_pct: 0.0010  # move beyond level (0.10%) that counts as a "break"
   require_close_confirm: true  # signal bar must close back on the correct side
   require_rejection_wick: false  # require a wick rejecting the level
+  # Candlestick confirmation (the manual method): hammer / bullish pin at
+  # support for longs, inverted hammer / bearish pin at resistance for shorts.
+  require_candle_confirm: true
+  pin_wick_ratio: 2.0       # rejection wick must be >= this * candle body
+  pin_opp_ratio: 1.5        # rejection wick >= this * the opposite wick
+  pin_min_frac: 0.5         # rejection wick >= this * total candle range
 
 risk:
   capital: 1000000          # starting capital (INR)
@@ -45,15 +51,15 @@ risk:
   sl_buffer_pct: 0.0010     # extra buffer beyond the structural stop
   atr_period: 14
   atr_mult: 1.5             # SL distance = atr_mult * ATR  (sl_method: atr)
-  sl_fixed_points: 30       # SL distance in index points  (sl_method: fixed)
+  sl_fixed_points: 50       # SL distance in index points  (sl_method: fixed)
   target_method: fixed      # rr | level | fixed
   rr_multiple: 1.5          # target = rr_multiple * risk    (target_method: rr)
-  target_fixed_points: 70   # target distance in points      (target_method: fixed)
+  target_fixed_points: 120  # target distance in points      (target_method: fixed)
   max_trades_per_day: 3
   one_position_at_a_time: true
 
 costs:
-  slippage_pct: 0.0002      # per side (0.02%)
+  slippage_pct: 0.00015     # per side (~2-3 index pts) — realistic for liquid futures
   brokerage_per_trade: 40   # flat INR, round-trip (entry + exit)
 
 backtest:
