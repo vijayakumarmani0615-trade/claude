@@ -30,6 +30,8 @@ strategy:
   roll_step: 300             # re-establish the tested vertical this far out
   roll_scope: vertical       # vertical (roll short + its wing) | short_only
   max_rolls_per_side: 3      # stop chasing after this many rolls per side
+  max_cycle_days: 10         # skip expiry gaps wider than this (drops monthlies
+                             # that sit alongside weeklies in a real chain)
 
 lots:
   lot_size: 75               # Nifty lot size

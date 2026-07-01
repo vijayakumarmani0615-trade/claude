@@ -112,10 +112,23 @@ python -m pytest tests/test_ironfly.py -v
 Results are written to `results_ironfly/`: `summary.json`, `cycles.csv` (one row
 per weekly fly), and `legs.csv` (every leg incl. rolls, with entry/exit/pnl).
 
-**You need real option prices.** Backtesting an options structure requires
-per-strike premium history — the synthetic generator only wires up the pipeline,
-it can't tell you whether the edge is real. Supply a long-format option chain
-CSV (columns, case-insensitive, extras ignored):
+**You need real option prices** — the synthetic generator only wires up the
+pipeline, it can't tell you whether the edge is real. Full sourcing guide in
+**[DATA.md](DATA.md)**. The free path is NSE's end-of-day F&O bhavcopy:
+
+```bash
+# 1. drop downloaded bhavcopy files (classic or UDiFF, .csv/.csv.zip) in a folder
+python scripts/build_options_chain.py data/bhavcopy/ -o data/nifty_options.csv
+# 2. daily spot bars to match the EOD chain
+python scripts/build_daily.py data/nifty_15m.csv -o data/nifty_daily.csv
+# 3. check coverage, then backtest
+python scripts/validate_chain.py --spot data/nifty_daily.csv --options data/nifty_options.csv
+python -m src.ironfly_cli --spot data/nifty_daily.csv --options data/nifty_options.csv
+```
+
+For intraday fills use a broker/vendor feed (Kite/Fyers/GDFL) instead — the
+loader takes a long-format CSV directly (columns case-insensitive, extras
+ignored):
 
 ```csv
 datetime,expiry,strike,option_type,close

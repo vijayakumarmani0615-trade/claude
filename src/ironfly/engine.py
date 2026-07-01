@@ -54,6 +54,7 @@ class IronFlyBacktester:
         self.roll_step = float(s.get("roll_step", self.wing))
         self.roll_scope = s.get("roll_scope", "vertical")
         self.max_rolls = int(s.get("max_rolls_per_side", 3))
+        self.max_cycle_days = int(s.get("max_cycle_days", 10))
 
         self.qty = int(cfg["lots"]["lot_size"]) * int(cfg["lots"]["lots"])
 
@@ -124,6 +125,10 @@ class IronFlyBacktester:
 
         for i in range(1, len(expiries)):
             prev, expiry = expiries[i - 1], expiries[i]
+            # Only trade genuine weekly cycles: skip gaps to far-dated (monthly /
+            # quarterly) expiries that appear alongside weeklies in a real chain.
+            if (expiry - prev).days > self.max_cycle_days:
+                continue
             # "day after expiry" = `offset` trading days after the previous expiry.
             di = bisect_right(self.spot_days, prev)
             target = di + (self.offset - 1)
