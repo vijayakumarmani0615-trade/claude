@@ -48,6 +48,7 @@ risk:
 costs:
   slippage_pct: 0.00015
   brokerage_per_trade: 40
+  entry_touch_extra_slippage_points: 0  # extra adverse points on touch-fill entries (stress test)
 
 backtest:
   entry: signal_level        # fill the moment price touches ema_fast, no confirmation wait

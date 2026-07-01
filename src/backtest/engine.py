@@ -69,6 +69,11 @@ class Backtester:
         c = cfg["costs"]
         self.slippage = float(c["slippage_pct"])
         self.brokerage = float(c["brokerage_per_trade"])
+        # Extra flat points of adverse slippage applied only to `signal_level`
+        # (touch-fill) entries, on top of `slippage_pct` -- for stress-testing
+        # how much a real limit order at the level might slip vs. the clean
+        # fill the backtest otherwise assumes.
+        self.entry_touch_extra_slippage = float(c.get("entry_touch_extra_slippage_points", 0))
 
         b = cfg["backtest"]
         self.entry_mode = b["entry"]
@@ -191,7 +196,7 @@ class Backtester:
                         # Fill the moment the bar's range touches the level
                         # (e.g. a resting limit order) -- no confirmation wait.
                         entry_raw = sig.level
-                        slip = entry_raw * self.slippage
+                        slip = entry_raw * self.slippage + self.entry_touch_extra_slippage
                         entry = entry_raw + slip if sig.side == "long" else entry_raw - slip
                         stop, target, dist = self._levels_for(sig, entry, i)
                         qty = self._position_size(entry, stop)

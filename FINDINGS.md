@@ -130,10 +130,35 @@ COVID era and the calmer 2023–25 trending market.
    range reaches it — the same convention already used for stop/target
    exits in this engine, but for real Nifty futures it assumes your limit
    order actually gets filled at that price with no queue/liquidity issue.
-   Worth stress-testing with extra slippage on entries specifically.
+   Stress-tested below.
 2. Costs modelled (`costs.slippage_pct`, `costs.brokerage_per_trade`) are the
    same defaults as the S/R strategy — confirm they match your actual broker
    before trusting the net numbers.
+
+### Touch-fill slippage stress test — how clean does the fill need to be?
+
+`scripts/ema_touch_slippage_stress.py` adds flat, adverse extra points on top
+of the already-modeled slippage (`costs.entry_touch_extra_slippage_points`),
+applied only to the touch-fill entry, and re-runs 20/40:
+
+| Extra adverse points on entry | Win% | PF | Net (₹L) |
+|---|---|---|---|
+| 0 (as committed) | 57.5 | 2.14 | +11.70 |
+| 5 | 51.8 | 1.69 | +8.05 |
+| 10 | 46.6 | 1.36 | +4.71 |
+| 15 | 41.2 | 1.10 | +1.39 |
+| **16–17 (breakeven)** | ~39–38 | ~1.0 | ~0 |
+| 20 | 33.2 | 0.78 | −3.57 |
+
+**Breakeven is around 16-17 extra points of adverse slippage on entry** —
+comfortably more than the bid-ask spread + market impact you'd typically
+expect filling 1 lot of Nifty futures on a 15-min touch (normally well under
+5 points outside of gap/news moments), so there's real margin here. But it
+is not unlimited: 16-17 points is under one stop-width (20pt) away from
+wiping the whole edge, so this is worth revisiting once you have actual
+fill data from paper trading — if real slippage on these touches runs
+higher than expected (thin liquidity, frequent gaps at the exact level),
+the edge shown above erodes faster than it looks.
 
 ### Stop x target sweep — is 20/40 a lucky point?
 
