@@ -529,3 +529,43 @@ any buffer size:
 - If EMA8 does matter specifically, a principled way to pick the tolerance
   would help (e.g. tied to typical bar range or ATR, not an arbitrary point
   count chosen because it backtested well).
+
+### Control test — is the EMA8 doing any specific work? No.
+
+`scripts/ema_control_no_ema.py` reruns the exact same buffer sweep with one
+change: the touched "level" is no longer `ema_fast`, it's **the close price
+from 8 bars ago** — a plain lag with zero smoothing and no claim to being a
+technical level of any kind. Everything else (EMA8/EMA50 trend filter,
+extension filter, 20pt/40pt exits) is identical:
+
+| Buffer (pts) | Real EMA8 (win% / PF / net ₹L) | Meaningless 8-bar-ago close (win% / PF / net ₹L) |
+|---|---|---|
+| 0 | 28.9 / 0.62 / −5.94 | 23.7 / 0.47 / −7.73 |
+| 10 | 40.7 / 1.07 / +0.99 | 33.4 / 0.77 / −3.15 |
+| 20 | 51.2 / 1.64 / +7.61 | 42.2 / 1.13 / +1.66 |
+| 30 | 59.5 / 2.31 / +12.89 | 52.1 / 1.71 / +7.78 |
+| 40 | 65.2 / 2.96 / +16.54 | 59.7 / 2.34 / +12.64 |
+
+**The meaningless control shows the exact same smooth, monotonic climb as
+the real EMA8** — crossing into profitability around the same buffer size,
+strongly profitable by the same point. The real EMA8 is consistently
+somewhat better (roughly 25-30% higher profit factor at every buffer size),
+but the shape and behavior of the whole pattern is the same with a number
+that has no claim to being a technical level at all.
+
+**Conclusion: the EMA8 is not doing the specific work the strategy
+attributes to it.** A meaningless reference point produces almost the same
+effect. What's actually driving the results is something generic — "a
+shallow retracement near roughly-recent price, during an EMA8/EMA50-
+confirmed trending day, with a 20pt stop/40pt target" has some predictive
+value on this data — but that is not "the 8 EMA" as a technical level in
+any meaningful sense. The EMA's modest edge over the plain lag is most
+likely just because it's a smoother, less noisy version of "recent price,"
+not anything specific to exponential moving averages.
+
+**Overall verdict on this strategy: "day trend + 8 EMA pullback," as a
+specific technical hypothesis, does not hold up.** What's left after all
+this investigation (shallow-retracement-in-a-trend, loosely defined) is a
+materially different and vaguer idea that would need its own dedicated
+specification and validation from scratch — it is not a patch or tuning
+issue on the original idea.
