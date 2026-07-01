@@ -225,3 +225,55 @@ out something that affects Nifty index behavior broadly across the whole
 2020–2026 sample (e.g. a structural feature of how Nifty trends intraday
 that may not hold if that regime changes, or may not transfer to another
 index/instrument).
+
+### Risk management review — is ₹2,00,000 / 1 lot actually safe?
+
+Everything above is about whether the entry+exit has an edge. This is a
+different question: given the edge is real, **does it fit inside the stated
+capital?** `src/risk/margin.py` adds rough futures-margin math (SPAN +
+exposure margin ≈ `margin_pct` of contract value — a stand-in, confirm the
+real figure with your broker) and two scripts use it.
+
+**`scripts/margin_check.py`** — required margin for 1 lot over the whole
+backtested history, since margin scales with the index price (~12,000 in
+2020 → ~26,300 at its peak → ~23,850 today), not a fixed number:
+
+| | Value |
+|---|---|
+| Min margin needed (2020 low) | ₹68,161 |
+| Max margin needed (Nov 2025 high) | ₹236,679 |
+| Margin needed **today** | **₹2,14,685** |
+| Bars where margin alone > ₹2,00,000 capital | 29.5% (first: Feb 2024) |
+| Bars where margin + 20pt stop risk > 70%-buffered threshold | 76.6% (first: Feb 2021) |
+| Capital needed to stay safe (30% buffer) for the **entire** history | **₹3,40,256** |
+
+**1 lot does not fit inside ₹2,00,000 today** — margin alone (₹2.15L, rough
+estimate) already exceeds the stated capital, before even counting the risk
+of a losing trade or leaving any buffer for adverse marks. This has been
+true since early 2024 on margin alone, and on a risk-adjusted basis
+(margin + stop-loss buffer) since early 2021 — i.e. for most of the backtest
+period, the ₹2L/1-lot combination as specified would not have been safe to
+actually run, independent of how good the entry/exit turned out to be.
+
+**`scripts/ema_risk_sweep.py`** — re-ran the full stop/target grid annotated
+with worst losing streak and capital-at-risk at the worst historical index
+price (₹26,298, Nov 2025): **every single combination comes back "NOT
+safe"** at that price, because capital-at-risk is driven by margin (which
+only depends on price and lot size) plus the stop distance — changing the
+stop/target doesn't fix an undersized-capital problem, it only moves the
+capital-at-risk figure by a few thousand rupees either way.
+
+For the committed 20/40 combo specifically: worst losing streak in the whole
+history was **10 consecutive losses**, totaling **−₹17,085** — useful to know
+concretely what a bad patch looks like, separate from the margin issue.
+
+**Bottom line: the entry/exit edge looks real (see the out-of-sample section
+above), but the capital sizing (₹2,00,000 for 1 Nifty futures lot) is not
+safe as specified, and hasn't been for most of the backtest period.** Before
+this goes anywhere near live capital, one of these needs to change:
+1. Increase capital to something with real headroom (₹3.5–4L, per the
+   margin_check output) if you want to keep trading Nifty futures 1 lot.
+2. Trade a smaller-notional instrument instead (e.g. Nifty options with
+   defined, much smaller capital requirements) if ₹2L is a hard ceiling.
+3. At minimum, confirm the real `margin_pct` with your broker — 12% is a
+   rough estimate and the true SPAN + exposure figure moves with volatility.

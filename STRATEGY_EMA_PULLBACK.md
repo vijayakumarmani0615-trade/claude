@@ -80,6 +80,17 @@ day's trade is already used up (no second attempt in the new direction).
   not for sizing (since sizing is fixed-lot, not risk-per-trade).
 - `max_trades_per_day: 1`, `one_position_at_a_time: true`.
 
+**⚠️ Capital adequacy: as specified, 1 lot does not currently fit inside
+₹2,00,000.** Margin math is rough (`risk.margin_pct`, `risk.margin_buffer_pct`
+— confirm the real number with your broker) but at today's Nifty level, 1
+lot needs roughly ₹2.15L in margin alone — more than the stated capital,
+before even counting stop-loss risk or leaving a safety buffer. See
+`scripts/margin_check.py` and the "Risk management review" section of
+`FINDINGS.md` — this has been true for most of the backtest period, not
+just today, since margin scales with the index price (~12,000 in 2020 to
+~26,000+ at its peak). Needs either more capital (₹3.5-4L) or a
+smaller-notional instrument before this is safe to run as specified.
+
 ## 6. Costs modelled
 Same as the S/R strategy: slippage per side + flat brokerage per round trip.
 

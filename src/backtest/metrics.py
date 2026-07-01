@@ -31,6 +31,7 @@ def compute(trades: list[Trade], starting_capital: float) -> dict:
     sharpe = float(pnl.mean() / pnl.std()) if pnl.std() > 0 else 0.0
 
     net = float(pnl.sum())
+    max_streak, worst_streak_loss = _worst_losing_streak(pnl)
     return {
         "trades": len(trades),
         "net_pnl": round(net, 2),
@@ -40,14 +41,36 @@ def compute(trades: list[Trade], starting_capital: float) -> dict:
         "losses": int(len(losses)),
         "avg_win": round(float(wins.mean()) if len(wins) else 0.0, 2),
         "avg_loss": round(float(losses.mean()) if len(losses) else 0.0, 2),
+        "worst_trade": round(float(pnl.min()), 2),
         "profit_factor": round(profit_factor, 2) if np.isfinite(profit_factor) else "inf",
         "expectancy_per_trade": round(net / len(trades), 2),
         "avg_r": round(float(r.mean()), 3),
         "max_drawdown": round(max_dd, 2),
         "max_drawdown_pct": round(max_dd_pct, 2),
+        "max_losing_streak": max_streak,
+        "worst_streak_loss": round(worst_streak_loss, 2),
         "sharpe_per_trade": round(sharpe, 3),
         "final_equity": round(float(equity[-1]), 2),
     }
+
+
+def _worst_losing_streak(pnl: np.ndarray) -> tuple[int, float]:
+    """Longest run of consecutive losing trades, and the cumulative loss
+    over that specific run (the "worst bad patch" you'd need to sit through).
+    """
+    best_len, best_loss = 0, 0.0
+    cur_len, cur_loss = 0, 0.0
+    for p in pnl:
+        if p < 0:
+            cur_len += 1
+            cur_loss += p
+        else:
+            if cur_len > best_len:
+                best_len, best_loss = cur_len, cur_loss
+            cur_len, cur_loss = 0, 0.0
+    if cur_len > best_len:
+        best_len, best_loss = cur_len, cur_loss
+    return best_len, best_loss
 
 
 def by_setup(trades: list[Trade]) -> pd.DataFrame:

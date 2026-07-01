@@ -44,6 +44,8 @@ risk:
   target_fixed_points: 40     # 40pt target (2R given the 20pt stop)
   max_trades_per_day: 1       # enforces "first visit only" — one trade per day
   one_position_at_a_time: true
+  margin_pct: 0.12            # ROUGH estimate of SPAN+exposure margin as % of contract value — confirm with your broker
+  margin_buffer_pct: 0.30     # keep this fraction of capital unused as headroom (see scripts/margin_check.py)
 
 costs:
   slippage_pct: 0.00015
