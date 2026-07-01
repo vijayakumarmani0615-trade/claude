@@ -131,9 +131,35 @@ COVID era and the calmer 2023–25 trending market.
    exits in this engine, but for real Nifty futures it assumes your limit
    order actually gets filled at that price with no queue/liquidity issue.
    Worth stress-testing with extra slippage on entries specifically.
-2. Only one set of stop/target numbers (20/40) has been tested here — worth
-   sweeping nearby values (see `scripts/sweep.py`'s approach) to check this
-   isn't a lucky point in the parameter space.
-3. Costs modelled (`costs.slippage_pct`, `costs.brokerage_per_trade`) are the
+2. Costs modelled (`costs.slippage_pct`, `costs.brokerage_per_trade`) are the
    same defaults as the S/R strategy — confirm they match your actual broker
    before trusting the net numbers.
+
+### Stop x target sweep — is 20/40 a lucky point?
+
+`scripts/ema_sweep.py` swept stop ∈ {10,15,20,25,30,40,50} x target ∈
+{15,20,30,40,50,60,80,100,120} (43 combos with target > stop), same 2020–Jun
+2026 data:
+
+**Every single combination is profitable** (profit factor > 1, positive net
+P&L, in every cell) — this is a broad profitable region, not an isolated
+spike at 20/40, which is a meaningfully stronger result than a single
+backtest number.
+
+Two useful reference points from the grid:
+
+| Stop/Target | Trades | Win% | PF | Net (₹L) | Max DD% |
+|---|---|---|---|---|---|
+| **20/40 (committed)** | 1,399 | 57.5 | 2.14 | 11.70 | −9.6 |
+| 10/120 (best net P&L in grid) | 1,398 | 30.8 | 2.87 | 17.98 | −3.65 |
+
+The tightest stops (10pt) paired with far targets produce the highest net
+P&L and profit factor in the grid, but at a ~31% win rate (roughly two
+losers for every winner) versus 57.5% at 20/40 — harder to sit through in
+practice, and a 10pt stop is small enough that real slippage/spread on
+Nifty futures could eat a much bigger fraction of it than this backtest's
+generic slippage assumption accounts for. **20/40 looks like the more
+robust, tradeable choice** (comfortably profitable, majority of trades are
+winners, moderate drawdown) rather than the grid-optimal one — treat the
+10pt-stop corner of the grid as a reason for confidence in the overall
+entry, not as a better number to actually trade.
