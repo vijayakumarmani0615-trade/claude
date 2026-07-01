@@ -3,8 +3,9 @@
 This is my mechanical interpretation of your idea:
 
 > *"Indices, 15-min. Day has to be trending, then take the trade on the first
-> visit to the 8 EMA. Capital ₹2,00,000, 1 lot. Target 40 points, stop-loss
-> 20 points."*
+> visit to the 8 EMA — enter the moment it touches, don't wait for
+> confirmation. Capital ₹2,00,000, 1 lot. Target 40 points, stop-loss 20
+> points."*
 
 Read this and correct anything that doesn't match how you actually trade.
 Every number maps to a knob in `config_ema_pullback.yaml`.
@@ -32,20 +33,29 @@ chart.
 Only longs are taken on an uptrend day, only shorts on a downtrend day.
 
 ## 3. "First visit to the 8 EMA" — entry rule
-For each bar, if the day's trend is up:
-- The bar's **low touches into ema_fast** (within `touch_pct`, 0.15%).
-- The bar **closes back above** ema_fast **and green** (close > open) —
-  confirms buyers defended it, not just a wick through.
+**Enters on the touch itself — no waiting for the candle to close or
+confirm.** For each bar, if the day's trend (as of the *previous* bar) is up:
+- The bar's **low touches into ema_fast** (within `touch_pct`, 0.15%,
+  measured against the previous bar's ema_fast — the level a resting order
+  would be watching).
+- That's it. The bar is filled **at the touched level**, the instant the
+  range reaches it (`backtest.entry: signal_level`) — not the bar's close,
+  not the next bar's open. What that bar goes on to do (closes green, red,
+  keeps falling) doesn't matter; you're already in.
 - Price must have been meaningfully **away from ema_fast recently**
   (`require_extension`: at least `extension_pct` = 0.15% away at some point
   in the last `extension_lookback_bars` = 6 bars). This is what makes it a
   *pullback* rather than chop sitting on the average — flag if this isn't
   what you meant by "visit."
 
-Downtrend is the mirror (high touches ema_fast, closes back below, red).
+Downtrend is the mirror (high touches ema_fast from below, filled at the
+level).
 
-A signal fires on the **close** of the signal bar; fill is the **next bar's
-open** (`backtest.entry: next_open`), same convention as the S/R strategy.
+Both the trend direction and the watched ema_fast level use the *prior*
+bar's value, not the signal bar's own — otherwise "no waiting" would secretly
+require knowing that bar's close before it happens (lookahead). This is the
+backtest's way of modeling a limit order resting at last-known-EMA, filled
+whenever price reaches it.
 
 **Only the first qualifying touch per day is traded** — enforced via
 `risk.max_trades_per_day: 1`. If the trend direction flips intraday, the

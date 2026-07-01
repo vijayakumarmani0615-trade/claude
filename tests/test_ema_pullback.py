@@ -28,7 +28,7 @@ def base_cfg() -> dict:
             "max_trades_per_day": 1, "one_position_at_a_time": True,
         },
         "costs": {"slippage_pct": 0.0002, "brokerage_per_trade": 40},
-        "backtest": {"entry": "next_open", "sl_priority": True},
+        "backtest": {"entry": "signal_level", "sl_priority": True},
     }
 
 
@@ -37,9 +37,13 @@ class _row:
         self.open, self.high, self.low, self.close = o, h, l, c
 
 
-def _make_uptrend_pullback_df():
+def _make_uptrend_pullback_df(last_bar_close_below_ema: bool = False):
     """Steady rise (so EMA8 > EMA50 and rising), price runs away from EMA8,
-    then a bar dips into EMA8 and closes back above it, green."""
+    then the final bar dips into the *previous* bar's EMA8. The entry no
+    longer waits for a close/candle confirmation, so the final bar's own
+    close can even end up on the wrong side of the level (parametrized via
+    `last_bar_close_below_ema`) and the touch should still fire.
+    """
     n = 70
     base = np.linspace(100, 140, n)
     close = base.copy()
@@ -48,16 +52,15 @@ def _make_uptrend_pullback_df():
     high = np.maximum(open_, close) + 0.3
     low = np.minimum(open_, close) - 0.3
 
-    # Craft the final bar as an explicit pullback-and-reject. ema_fast at the
-    # signal bar itself blends in that bar's own close (alpha = 2/(8+1)), so
-    # derive it forward from ema_prev rather than assuming it equals ema_prev.
+    # The watched level for the final bar is ema_fast as of the PRIOR bar
+    # (n-2), since that's what evaluate() uses to avoid lookahead.
     ema_prev = ema(pd.Series(close[: n - 1]), 8).iloc[-1]
-    alpha = 2 / (8 + 1)
-    c_last = ema_prev + 3.0                       # still rising, well above ema_prev
-    ema_last = alpha * c_last + (1 - alpha) * ema_prev
-    o_last = ema_last - 0.3                       # open below ema_last -> body closes green
-    l_last = ema_last - 0.1                       # low dips into ema_last (the "touch")
-    h_last = c_last + 0.1
+    if last_bar_close_below_ema:
+        o_last, c_last = ema_prev + 1.0, ema_prev - 2.0  # red candle, closes under ema_prev
+    else:
+        o_last, c_last = ema_prev - 0.3, ema_prev + 3.0  # green candle, closes over ema_prev
+    l_last = ema_prev - 0.1                              # low dips into ema_prev (the "touch")
+    h_last = max(o_last, c_last) + 0.1
 
     open_[-1] = o_last
     close[-1] = c_last
@@ -75,10 +78,10 @@ def test_trend_detects_uptrend_on_rising_series():
     cfg = base_cfg()
     df = _make_uptrend_pullback_df()
     strat = EmaPullbackStrategy(cfg, df)
-    assert strat._trend(len(df) - 1) == "up"
+    assert strat._trend(len(df) - 2) == "up"  # trend is read as of bar i-1
 
 
-def test_ema_pullback_long_signal_fires_on_touch_and_reject():
+def test_ema_pullback_long_signal_fires_on_touch_alone():
     cfg = base_cfg()
     df = _make_uptrend_pullback_df()
     strat = EmaPullbackStrategy(cfg, df)
@@ -88,6 +91,18 @@ def test_ema_pullback_long_signal_fires_on_touch_and_reject():
     assert sig is not None
     assert sig.side == "long"
     assert sig.setup == "ema_pullback"
+
+
+def test_ema_pullback_fires_even_if_bar_closes_against_the_trend():
+    """No confirmation wait: a touch fires even if the bar closes red."""
+    cfg = base_cfg()
+    df = _make_uptrend_pullback_df(last_bar_close_below_ema=True)
+    strat = EmaPullbackStrategy(cfg, df)
+    i = len(df) - 1
+    row = df.iloc[i]
+    sig = strat.evaluate(i, _row(row.open, row.high, row.low, row.close))
+    assert sig is not None
+    assert sig.side == "long"
 
 
 def test_no_signal_without_trend():

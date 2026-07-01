@@ -1,7 +1,7 @@
 """EMA(8) trend-pullback strategy — signal generation.
 
-Mechanical read of: "day has to be trending, then take the first pullback to
-the 8 EMA."
+Mechanical read of: "day has to be trending, then enter the first time price
+touches the 8 EMA — don't wait for the candle to close and confirm."
 
   1. Trend filter (`ema_fast` vs `ema_slow`, both computed continuously across
      the whole series so they carry over day to day like on a chart):
@@ -15,15 +15,19 @@ the 8 EMA."
      the last `extension_lookback_bars` bars — this is what makes it a
      genuine pullback rather than chop hugging the average.
 
-  3. Entry trigger — first qualifying touch of ema_fast in the trend
-     direction:
-       LONG : bar's low touches into ema_fast (within `touch_pct`) and the
-              bar closes back above ema_fast, green (close > open).
-       SHORT: mirror (high touches ema_fast, closes back below, red).
+  3. Entry trigger — the first bar whose range touches ema_fast in the trend
+     direction fires immediately, no close/candle confirmation required:
+       LONG : bar's low touches into ema_fast (within `touch_pct`).
+       SHORT: bar's high touches into ema_fast (within `touch_pct`).
 
-A signal is emitted on the *close* of the signal bar; the backtester decides
-the actual fill (default: next bar's open). "First visit per day" is enforced
-by the caller via `risk.max_trades_per_day: 1`, not inside this class.
+Both the trend direction and the watched ema_fast level are evaluated as of
+bar `i - 1` (the last fully known bar) — like a resting limit order placed
+at the previous bar's EMA value, filled the moment the current bar's range
+reaches it, without waiting for that bar to close. Using bar `i`'s own
+(not-yet-known) EMA value would be lookahead. The backtester fills at
+`sig.level` on the same bar the touch occurs (`backtest.entry: signal_level`),
+not next bar's open. "First visit per day" is enforced by the caller via
+`risk.max_trades_per_day: 1`, not inside this class.
 """
 from __future__ import annotations
 
@@ -62,15 +66,15 @@ class EmaPullbackStrategy:
             return "down"
         return None
 
-    def _was_extended(self, i: int, direction: str) -> bool:
-        """Was price meaningfully away from ema_fast at some point recently?
-
-        Confirms a genuine pullback rather than chop hugging the average.
+    def _was_extended(self, ref_i: int, direction: str) -> bool:
+        """Was price meaningfully away from ema_fast at some point recently
+        (up to and including bar `ref_i`)? Confirms a genuine pullback rather
+        than chop hugging the average.
         """
         if not self.require_extension:
             return True
-        start = max(0, i - self.extension_lookback)
-        for j in range(start, i):
+        start = max(0, ref_i - self.extension_lookback + 1)
+        for j in range(start, ref_i + 1):
             f = self.ema_fast[j]
             if np.isnan(f) or f <= 0:
                 continue
@@ -83,26 +87,27 @@ class EmaPullbackStrategy:
 
     def evaluate(self, i: int, bar) -> Signal | None:
         """Return a Signal for bar `i`, or None. `bar` is a row-like with OHLC."""
-        direction = self._trend(i)
+        if i < 1:
+            return None
+
+        direction = self._trend(i - 1)
         if direction is None:
             return None
 
-        f = self.ema_fast[i]
-        if np.isnan(f) or f <= 0:
+        level = self.ema_fast[i - 1]
+        if np.isnan(level) or level <= 0:
             return None
 
         o, h, l, c = bar.open, bar.high, bar.low, bar.close
-        tol = f * self.touch_pct
+        tol = level * self.touch_pct
 
         if direction == "up":
-            touched = l <= f + tol
-            closed_back = c > f and c > o
-            if touched and closed_back and self._was_extended(i, "up"):
-                return Signal(i, "long", "ema_pullback", float(f), c, h, l)
+            touched = l <= level + tol
+            if touched and self._was_extended(i - 1, "up"):
+                return Signal(i, "long", "ema_pullback", float(level), c, h, l)
         else:  # down
-            touched = h >= f - tol
-            closed_back = c < f and c < o
-            if touched and closed_back and self._was_extended(i, "down"):
-                return Signal(i, "short", "ema_pullback", float(f), c, h, l)
+            touched = h >= level - tol
+            if touched and self._was_extended(i - 1, "down"):
+                return Signal(i, "short", "ema_pullback", float(level), c, h, l)
 
         return None

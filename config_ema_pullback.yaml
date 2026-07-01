@@ -50,5 +50,5 @@ costs:
   brokerage_per_trade: 40
 
 backtest:
-  entry: next_open
+  entry: signal_level        # fill the moment price touches ema_fast, no confirmation wait
   sl_priority: true

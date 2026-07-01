@@ -63,14 +63,13 @@ As written, it is **not safe to automate for live trading**.
 
 ---
 
-## EMA(8) trend-pullback — backtest (20pt stop / 40pt target)
+## EMA(8) trend-pullback — v1: wait for candle close confirmation (superseded)
 
-Second strategy in the repo (see `STRATEGY_EMA_PULLBACK.md`): trend filter via
-EMA8/EMA50, first pullback-touch of EMA8 per day, fixed 1-lot sizing on
-₹2,00,000 capital, fixed 20-point stop and 40-point target (2R).
-
-Run on the same 2020–Jun 2026 Nifty 15-min data
-(`config_ema_pullback.yaml`, `--strategy ema_pullback`):
+First version of the entry rule: touch ema_fast, then require the *same* bar
+to close back in the trend direction (green/red body) before entering, filled
+at the next bar's open. Trend filter via EMA8/EMA50, first pullback-touch of
+EMA8 per day, fixed 1-lot sizing on ₹2,00,000 capital, fixed 20-point stop and
+40-point target (2R). Run on the same 2020–Jun 2026 Nifty 15-min data:
 
 | Metric | Value |
 |---|---|
@@ -78,51 +77,63 @@ Run on the same 2020–Jun 2026 Nifty 15-min data
 | Net P&L | −₹3,16,889 |
 | Win rate | 33.8% |
 | Profit factor | 0.80 |
-| Avg R | −0.16 |
 
-By year:
+**Loses in 6 of 7 years.** Three variants (extension filter off, structure
+stop + 2R target, both combined) were tried to rule out an exit/filter
+artifact — none flipped the sign; best case (structure stop) still lost net
+while raising win rate to 37.7% / PF to 0.89. Conclusion at the time: the
+mechanical entry didn't show a demonstrable edge independent of the exit rule.
+
+**This turned out to be about entry timing, not the entry idea itself** — see
+below.
+
+## EMA(8) trend-pullback — v2: enter on touch, no confirmation wait
+
+User correction: don't wait for the candle to close/confirm — enter the
+instant price touches the 8 EMA. Mechanically: trend direction and the
+watched ema_fast level are read as of the *prior* bar (avoiding lookahead),
+and the fill happens at that level the moment the current bar's range reaches
+it (`backtest.entry: signal_level`), not next bar's open. Same 20pt stop /
+40pt target, same 1-lot sizing, same data:
+
+| Metric | Value |
+|---|---|
+| Trades | 1,399 |
+| Net P&L | **+₹11,69,646** |
+| Win rate | 57.5% |
+| Profit factor | **2.14** |
+| Avg R | 0.56 |
+| Max drawdown | −₹30,433 (−9.6%) |
+
+By year — **profitable in all 7 years**, and win rate trends up over time:
 
 | Year | Trades | Net (₹) | Win% |
 |------|--------|---------|------|
-| 2020 | 240 | −66,675 | 30.8 |
-| 2021 | 233 | −42,121 | 34.3 |
-| 2022 | 235 | −58,864 | 32.8 |
-| 2023 | 210 | −31,507 | 36.7 |
-| 2024 | 213 | −1,15,955 | 28.2 |
-| 2025 | 215 | +4,564 | 40.9 |
-| 2026 (partial) | 11 | −6,330 | 27.3 |
+| 2020 | 244 | +1,05,800 | 47.1 |
+| 2021 | 239 | +1,34,328 | 50.6 |
+| 2022 | 237 | +1,65,137 | 54.0 |
+| 2023 | 221 | +2,68,195 | 66.1 |
+| 2024 | 225 | +2,46,764 | 64.4 |
+| 2025 | 222 | +2,46,751 | 65.3 |
+| 2026 (partial) | 11 | +2,672 | 45.5 |
 
-**Loses in 6 of 7 years** — unlike the S/R strategy (which decayed from a
-real 2020–21 edge), this one shows no edge in *any* period, including the
-high-volatility COVID years. At a win rate of ~34% a 2R payoff needs ~33%
-just to break even gross, and costs (brokerage + slippage) push the real
-breakeven higher — so the entry alone isn't clearing its own stop/target
-geometry, let alone costs.
+Entering right at the level — instead of chasing price after a confirming
+candle closes — puts the fixed 20pt stop exactly where the technical level
+already is and captures the full reaction move to the 40pt target, which is
+most of the turnaround from v1. Unlike the S/R strategy (edge only in
+2020–22) or v1 of this strategy (no edge anywhere), this is consistently
+profitable across every year in the sample, through both the high-volatility
+COVID era and the calmer 2023–25 trending market.
 
-**As backtested, this is not safe to automate for live trading.**
-
-### Variants tested to rule out an exit/filter artifact
-
-| Variant | Trades | Net P&L | Win% | Profit factor |
-|---|---|---|---|---|
-| Baseline (extension filter on, fixed 20/40) | 1,357 | −3,16,889 | 33.8 | 0.80 |
-| A: extension filter **off** (fixed 20/40) | 1,494 | −3,32,519 | 34.1 | 0.81 |
-| B: **structure stop**, 2R target (extension on) | 1,357 | −3,39,175 | 37.7 | 0.89 |
-| C: extension off **+** structure stop, 2R target | 1,494 | −4,64,785 | 38.0 | 0.87 |
-
-None flips the sign. Turning off the extension filter adds ~140 trades/year
-at essentially the same win rate — it isn't the bottleneck. Switching to a
-structure-based stop (beyond the signal bar's low/high) raises the win rate
-(33.8% → 37.7%) and profit factor (0.80 → 0.89) since the stop is no longer
-an arbitrary fixed distance, but it still loses net — the wider stop costs
-more per loss than the extra win rate recovers. By year, variant B only
-turns 2023 profitable (+₹47,720) while 2020, 2021, 2022, 2024 stay negative
-and 2026 (partial) gets worse (−₹34,564, 18.2% win rate) — no combination
-found a period where the entry has a real edge.
-
-**Conclusion: the mechanical entry (day-trend filter + first EMA8-touch) does
-not have a demonstrable edge on this data, independent of which reasonable
-exit rule is paired with it.** That doesn't rule out the discretionary
-version working (context, level confluence, or trade selection not captured
-mechanically here) — but the rule as specified should not be automated live
-without a different entry filter or out-of-sample evidence it works.
+**Caveats before trusting this for live capital:**
+1. The backtest fills entries at the exact touched level whenever a bar's
+   range reaches it — the same convention already used for stop/target
+   exits in this engine, but for real Nifty futures it assumes your limit
+   order actually gets filled at that price with no queue/liquidity issue.
+   Worth stress-testing with extra slippage on entries specifically.
+2. Only one set of stop/target numbers (20/40) has been tested here — worth
+   sweeping nearby values (see `scripts/sweep.py`'s approach) to check this
+   isn't a lucky point in the parameter space.
+3. Costs modelled (`costs.slippage_pct`, `costs.brokerage_per_trade`) are the
+   same defaults as the S/R strategy — confirm they match your actual broker
+   before trusting the net numbers.

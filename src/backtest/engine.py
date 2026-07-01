@@ -187,6 +187,22 @@ class Backtester:
                             }
                             in_pos = True
                             trades_today += 1
+                    elif self.entry_mode == "signal_level":
+                        # Fill the moment the bar's range touches the level
+                        # (e.g. a resting limit order) -- no confirmation wait.
+                        entry_raw = sig.level
+                        slip = entry_raw * self.slippage
+                        entry = entry_raw + slip if sig.side == "long" else entry_raw - slip
+                        stop, target, dist = self._levels_for(sig, entry, i)
+                        qty = self._position_size(entry, stop)
+                        if qty > 0 and self._valid(sig, entry, stop) and not in_pos:
+                            pos = {
+                                "sig": sig, "entry": entry, "stop": stop,
+                                "target": target, "qty": qty, "dist": dist,
+                                "entry_time": t,
+                            }
+                            in_pos = True
+                            trades_today += 1
                     else:
                         pending = sig  # fill next bar's open
 
