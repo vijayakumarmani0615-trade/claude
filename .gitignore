@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Results & user data (keep the repo clean; these are generated/private)
+results/
+data/*.csv
+!data/sample_15m.csv
+
+# Never commit broker credentials / tokens
+.env
+*.token
+credentials.json
+secrets.yaml
