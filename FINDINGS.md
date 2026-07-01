@@ -99,12 +99,30 @@ just to break even gross, and costs (brokerage + slippage) push the real
 breakeven higher — so the entry alone isn't clearing its own stop/target
 geometry, let alone costs.
 
-**As backtested, this is not safe to automate for live trading.** Two things
-worth checking before concluding the entry idea itself is dead:
-1. The `require_extension` filter (open question #1 in
-   `STRATEGY_EMA_PULLBACK.md`) may be too loose/tight — worth toggling off
-   and re-running to see if it changes the picture.
-2. A wider stop (structure- or ATR-based, instead of a flat 20pt) may suit an
-   EMA pullback better than a fixed point stop, since 20pts is a small,
-   price-level-independent distance that doesn't account for how far price
-   typically swings around the EMA on a given day.
+**As backtested, this is not safe to automate for live trading.**
+
+### Variants tested to rule out an exit/filter artifact
+
+| Variant | Trades | Net P&L | Win% | Profit factor |
+|---|---|---|---|---|
+| Baseline (extension filter on, fixed 20/40) | 1,357 | −3,16,889 | 33.8 | 0.80 |
+| A: extension filter **off** (fixed 20/40) | 1,494 | −3,32,519 | 34.1 | 0.81 |
+| B: **structure stop**, 2R target (extension on) | 1,357 | −3,39,175 | 37.7 | 0.89 |
+| C: extension off **+** structure stop, 2R target | 1,494 | −4,64,785 | 38.0 | 0.87 |
+
+None flips the sign. Turning off the extension filter adds ~140 trades/year
+at essentially the same win rate — it isn't the bottleneck. Switching to a
+structure-based stop (beyond the signal bar's low/high) raises the win rate
+(33.8% → 37.7%) and profit factor (0.80 → 0.89) since the stop is no longer
+an arbitrary fixed distance, but it still loses net — the wider stop costs
+more per loss than the extra win rate recovers. By year, variant B only
+turns 2023 profitable (+₹47,720) while 2020, 2021, 2022, 2024 stay negative
+and 2026 (partial) gets worse (−₹34,564, 18.2% win rate) — no combination
+found a period where the entry has a real edge.
+
+**Conclusion: the mechanical entry (day-trend filter + first EMA8-touch) does
+not have a demonstrable edge on this data, independent of which reasonable
+exit rule is paired with it.** That doesn't rule out the discretionary
+version working (context, level confluence, or trade selection not captured
+mechanically here) — but the rule as specified should not be automated live
+without a different entry filter or out-of-sample evidence it works.
