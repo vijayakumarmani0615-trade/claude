@@ -41,14 +41,14 @@ strategy:
 risk:
   capital: 1000000          # starting capital (INR)
   risk_per_trade_pct: 1.0   # % of capital risked per trade (sizes the quantity)
-  sl_method: structure      # structure | atr | fixed
+  sl_method: fixed          # structure | atr | fixed
   sl_buffer_pct: 0.0010     # extra buffer beyond the structural stop
   atr_period: 14
   atr_mult: 1.5             # SL distance = atr_mult * ATR  (sl_method: atr)
   sl_fixed_points: 30       # SL distance in index points  (sl_method: fixed)
-  target_method: rr         # rr | level | fixed
+  target_method: fixed      # rr | level | fixed
   rr_multiple: 1.5          # target = rr_multiple * risk    (target_method: rr)
-  target_fixed_points: 45   # target distance in points      (target_method: fixed)
+  target_fixed_points: 70   # target distance in points      (target_method: fixed)
   max_trades_per_day: 3
   one_position_at_a_time: true
 
