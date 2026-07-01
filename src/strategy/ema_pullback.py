@@ -27,8 +27,12 @@ touches the 8 EMA — don't wait for the candle to close and confirm."
      at 0.15% it was a ~35-40pt band at Nifty's current level -- comparable
      to a whole average 15-min bar's range -- so 60% of "touches" in an
      earlier version of this backtest never actually reached the EMA8 line
-     at all, just got somewhat close. Keep this at 0 (or a couple of points
-     at most) unless you deliberately want a wider "close enough" zone.
+     at all, just got somewhat close. Keep this at 0 unless you deliberately
+     want a zone that widens as the index rises.
+
+     `touch_buffer_points` is a small FIXED number of points added on top,
+     for deliberately testing a modest "close enough" tolerance without it
+     silently scaling with price the way a percentage does.
 
 Both the trend direction and the watched ema_fast level are evaluated as of
 bar `i - 1` (the last fully known bar) — like a resting limit order placed
@@ -55,6 +59,7 @@ class EmaPullbackStrategy:
         self.ema_slow_n = int(sc.get("ema_slow", 50))
         self.trend_slope_bars = int(sc.get("trend_slope_bars", 10))
         self.touch_pct = float(sc.get("touch_pct", 0.0))
+        self.touch_buffer_points = float(sc.get("touch_buffer_points", 0.0))
         self.require_extension = bool(sc.get("require_extension", True))
         self.extension_pct = float(sc.get("extension_pct", 0.0015))
         self.extension_lookback = int(sc.get("extension_lookback_bars", 6))
@@ -109,7 +114,7 @@ class EmaPullbackStrategy:
             return None
 
         o, h, l, c = bar.open, bar.high, bar.low, bar.close
-        tol = level * self.touch_pct
+        tol = level * self.touch_pct + self.touch_buffer_points
 
         if direction == "up":
             touched = l <= level + tol

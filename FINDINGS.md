@@ -477,3 +477,55 @@ trying more variations:
 - Re-adding a candle-confirmation requirement (like the S/R strategy's pin
   bar) on top of a literal touch, rather than "no confirmation," hasn't
   been tested under the corrected touch logic.
+
+### Deliberate small fixed-point tolerance — tested, and it's not a clean fix
+
+Added `touch_buffer_points` (a flat point tolerance, doesn't scale with
+price like `touch_pct` did) and swept it from 0 to 40 points at the
+committed 20pt/40pt stop/target (`scripts/ema_touch_buffer_sweep.py`):
+
+| Buffer (pts) | Win% | PF | Net (₹L) | Max DD% |
+|---|---|---|---|---|
+| 0 (literal touch) | 28.9 | 0.62 | −5.94 | −288.8 |
+| 5 | 34.6 | 0.82 | −2.76 | −136.1 |
+| 10 | 40.7 | **1.07** | +0.99 | −18.7 |
+| 15 | 45.5 | 1.31 | +4.01 | −11.3 |
+| 20 | 51.2 | 1.64 | +7.61 | −9.7 |
+| 25 | 55.9 | 2.00 | +10.71 | −6.2 |
+| 30 | 59.5 | 2.31 | +12.89 | −4.9 |
+| 40 | 65.2 | 2.96 | +16.54 | −3.4 |
+
+**This is a smooth, monotonic curve, not a threshold effect** — there's no
+buffer size where it "switches on." It crosses breakeven around 10 points
+and keeps climbing continuously toward the old (buggy) ~35-40pt tolerance's
+performance level as the buffer approaches that same magnitude. Checked
+out-of-sample at several buffer sizes (10/15/20/25/30) — every one holds up
+or improves out-of-sample (e.g. buffer=10: PF 1.03 in-sample → 1.12
+out-of-sample; buffer=30: PF 2.16 → 2.48), so this isn't a fluke of a
+particular date range at any buffer size.
+
+**Honest read: a genuinely small, deliberate tolerance (single digits to
+~10-15 points) does not show a strong edge on its own** — it's marginal to
+barely-profitable at best. **The edge only becomes clearly strong once the
+buffer grows to ~25-30+ points — close enough to the original bug's ~35-40pt
+magnitude that this cannot be confidently called "a different, legitimate
+mechanism" versus "the same effect that inflated the original numbers, with
+a smaller dial."** There's no clean line between "reasonable slack for
+noise" and "recreating the bug" — it's a continuum, and the strong results
+live at the same end of that continuum the bug did.
+
+This doesn't mean nothing is there — the effect is real and holds up
+out-of-sample at every size tested, meaning *something* about "a pullback
+that gets somewhat near (not necessarily touching) a fast EMA in a trending
+day" has predictive value on this data. But it's a materially different,
+vaguer idea than "enters on a literal touch of the 8 EMA," and picking any
+specific buffer value to commit to right now would just be re-choosing how
+much of the original bug to keep, dressed up as a parameter. Before trusting
+any buffer size:
+- Worth checking whether the effect is really about EMA8 specifically, or
+  about "any recent shallow pullback in a trending day" regardless of which
+  reference line is used — if a plain %-off-recent-high/low filter (no EMA
+  at all) shows a similar pattern, the EMA8 isn't doing the work.
+- If EMA8 does matter specifically, a principled way to pick the tolerance
+  would help (e.g. tied to typical bar range or ATR, not an arbitrary point
+  count chosen because it backtested well).

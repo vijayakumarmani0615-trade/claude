@@ -27,6 +27,7 @@ strategy:
   touch_pct: 0.0            # literal touch/cross of ema_fast required (0.15% was a ~35-40pt
                              # band -- nearly a full bar's range -- and caused 60% of "touches"
                              # to never actually reach the EMA8 line; see FINDINGS.md)
+  touch_buffer_points: 0    # small FIXED-point tolerance on top (doesn't scale with price like a %)
   require_extension: true   # require price to have been away from ema_fast recently
   extension_pct: 0.0015     # how far away (0.15%) counts as "extended"
   extension_lookback_bars: 6  # look this many bars back for the extension

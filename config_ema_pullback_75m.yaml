@@ -39,6 +39,7 @@ strategy:
   ema_slow: 50
   trend_slope_bars: 2       # ~2 bars * 75min ~= 10 bars * 15min (wall-clock equivalent)
   touch_pct: 0.0            # literal touch/cross required (see FINDINGS.md touch_pct bug)
+  touch_buffer_points: 0    # small FIXED-point tolerance on top (doesn't scale with price like a %)
   require_extension: true
   extension_pct: 0.0015
   extension_lookback_bars: 1  # ~1 bar * 75min ~= 6 bars * 15min
