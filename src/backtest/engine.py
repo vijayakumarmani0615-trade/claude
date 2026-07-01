@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, asdict
 
+import numpy as np
 import pandas as pd
 
 from ..indicators.atr import atr
@@ -82,8 +83,24 @@ class Backtester:
         d = cfg["data"]
         self.intraday = bool(d["intraday"])
         self.square_off = pd.to_datetime(d["square_off"]).time()
+        self.square_off_mask = self._compute_square_off_mask(df)
 
         self.trades: list[Trade] = []
+
+    def _compute_square_off_mask(self, df: pd.DataFrame):
+        """True where a position must be forced flat: at/after the configured
+        cutoff time, OR on the last bar of the trading day -- whichever comes
+        first. The time check alone only works when some bar's start time
+        lands exactly on the cutoff (true for 15-min bars with a 15:15
+        cutoff); coarser bars (e.g. 75-min: 09:15/10:30/11:45/13:00/14:15)
+        never hit it, so without the last-bar fallback positions would never
+        get squared off and could carry across days.
+        """
+        times = df.index
+        by_time = times.time >= self.square_off
+        day = times.normalize()
+        is_last_of_day = np.append(day[:-1].to_numpy() != day[1:].to_numpy(), True)
+        return by_time | is_last_of_day
 
     # -- risk math -----------------------------------------------------------
     def _stop_distance(self, sig: Signal, i: int) -> float:
@@ -175,7 +192,7 @@ class Backtester:
 
             # 3) Look for a new signal on this bar (if flat & under the cap).
             can_trade = (not in_pos or not self.one_at_a_time) and trades_today < self.max_trades
-            if can_trade and pending is None and not self._is_square_off(t):
+            if can_trade and pending is None and not (self.intraday and self.square_off_mask[i]):
                 bar = _Bar(opens[i], highs[i], lows[i], closes[i])
                 sig = self.strategy.evaluate(i, bar)
                 if sig is not None:
@@ -212,7 +229,7 @@ class Backtester:
                         pending = sig  # fill next bar's open
 
             # 4) Hard intraday square-off at/after the cutoff time.
-            if in_pos and self.intraday and self._is_square_off(t):
+            if in_pos and self.intraday and self.square_off_mask[i]:
                 self._close(pos, closes[i], t, "square_off")
                 in_pos = False
                 pos = {}
@@ -231,8 +248,6 @@ class Backtester:
             return stop < entry
         return stop > entry
 
-    def _is_square_off(self, t: pd.Timestamp) -> bool:
-        return self.intraday and t.time() >= self.square_off
 
     def _check_exit(self, pos, i, highs, lows, closes, t):
         side = pos["sig"].side

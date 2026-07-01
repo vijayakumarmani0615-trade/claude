@@ -1,0 +1,64 @@
+# =============================================================================
+# Strategy configuration: EMA(8) trend-pullback -- 75-min timeframe
+#
+# Identical to config_ema_pullback.yaml (same strategy/risk/cost parameters,
+# same 20pt stop / 40pt target) except the data source, to directly compare
+# 15-min vs 75-min. NOTE: `trend_slope_bars`, `extension_lookback_bars` etc.
+# are counted in BARS, not wall-clock time -- at 75-min they span 5x the
+# wall-clock duration they did at 15-min (e.g. trend_slope_bars: 10 is ~1
+# session day at 75-min vs ~2.5 hours at 15-min). Left unchanged here since
+# the request was to run "the same" config, but that's a real difference in
+# what the parameters mean, not just a data swap. See FINDINGS.md.
+#
+# Run with:
+#   python -m src.cli --config config_ema_pullback_75m.yaml --strategy ema_pullback
+# =============================================================================
+
+data:
+  source: csv
+  symbol: "NIFTY"
+  csv_path: "data/nifty_75m.csv"
+  yf_period: "60d"
+  timeframe: "75m"
+  session_start: "09:15"
+  session_end: "15:30"
+  square_off: "15:15"       # only reached exactly on 15-min bars; 75-min bars
+                             # square off on the last bar of each day instead
+                             # (see Backtester._compute_square_off_mask)
+  intraday: true
+
+strategy:
+  ema_fast: 8
+  ema_slow: 50
+  trend_slope_bars: 10
+  touch_pct: 0.0015
+  require_extension: true
+  extension_pct: 0.0015
+  extension_lookback_bars: 6
+
+risk:
+  capital: 200000
+  sizing_method: fixed_lot
+  lot_size: 75
+  lots: 1
+  sl_method: fixed
+  sl_buffer_pct: 0.0010
+  atr_period: 14
+  atr_mult: 1.5
+  sl_fixed_points: 20
+  target_method: fixed
+  rr_multiple: 1.5
+  target_fixed_points: 40
+  max_trades_per_day: 1
+  one_position_at_a_time: true
+  margin_pct: 0.12
+  margin_buffer_pct: 0.30
+
+costs:
+  slippage_pct: 0.00015
+  brokerage_per_trade: 40
+  entry_touch_extra_slippage_points: 0
+
+backtest:
+  entry: signal_level
+  sl_priority: true

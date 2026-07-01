@@ -277,3 +277,52 @@ this goes anywhere near live capital, one of these needs to change:
    defined, much smaller capital requirements) if ₹2L is a hard ceiling.
 3. At minimum, confirm the real `margin_pct` with your broker — 12% is a
    rough estimate and the true SPAN + exposure figure moves with volatility.
+
+---
+
+## EMA(8) trend-pullback — same config on 75-min bars
+
+Also fixed a real bug while setting this up: the square-off check compared
+each bar's start time against 15:15, which only ever matches on 15-min bars.
+75-min session bars start at 09:15/10:30/11:45/13:00/14:15 — none reach
+15:15 — so positions would never have been forced flat and could carry
+across days. `Backtester._compute_square_off_mask` now also treats the
+*last bar of each trading day* as a square-off trigger, which generalizes to
+any bar size. This also quietly fixed 4 pre-existing truncated/half-days in
+the Nifty data (e.g. 2021-02-24, last bar 10:00) where the old time-only
+check would have carried a position into the next day even at 15-min —
+net P&L on the 15-min/20/40 backtest shifts by about ₹2,300 because of it
+(₹11,69,646 → ₹11,67,332), not because anything about the strategy changed.
+
+`scripts/build_75m.py` resamples the existing 15-min data to 75-min (5 bars
+covering the session evenly), and `config_ema_pullback_75m.yaml` runs the
+*exact same* strategy/risk parameters — same 20pt stop, 40pt target, same
+`trend_slope_bars: 10`, `touch_pct`, etc. — against it:
+
+| Metric | 15-min (committed) | 75-min (same config) |
+|---|---|---|
+| Trades | 1,399 | 1,021 |
+| Win rate | 57.5% | 40.9% |
+| Profit factor | 2.14 | **1.06** |
+| Net P&L | +₹11.67L | +₹0.68L |
+| Max drawdown | −9.6% | **−42.4%** |
+| Worst losing streak | 10 | 13 |
+
+By year (75-min): profitable in 2020, 2023, 2024, roughly flat in 2025,
+**losing in 2021, 2022, and 2026 (partial)** — much less consistent than the
+15-min version's 7-for-7 record. Long side stays profitable (+₹1.34L,
+win 44.9%) but short flips net negative (−₹0.66L, win 35.7%).
+
+**This isn't really an apples-to-apples test, and the weak result reflects
+that more than it reflects "75-min doesn't work":** every strategy parameter
+here is counted in *bars*, not wall-clock time. `trend_slope_bars: 10` spans
+~2.5 hours at 15-min but ~2 trading days at 75-min; `touch_pct`/
+`extension_pct` are percentages, but a 75-min bar's typical high-low range
+is much wider than a 15-min bar's, so the same 0.15% tolerance means a
+very different thing at each scale. Most tellingly, the stop-hit rate jumps
+to 59% (vs 42% at 15-min) with the *same* 20pt stop — a strong sign the
+stop is simply too tight for how far price moves inside a 75-min bar,
+not that the underlying pullback idea fails at this timeframe. A fair test
+would re-tune the stop/target and bar-count parameters for 75-min rather
+than reusing 15-min numbers verbatim — not done here since the request was
+specifically to try "the same" config on 75-min.
